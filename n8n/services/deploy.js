@@ -55,7 +55,7 @@ async function deploySingle(client, workflow, existingId) {
  * @param {{ env: string, slug?: string }} options
  * @returns {Promise<{ env: string, steps: Array<{type, slug, status, action?, id?, error?, reason?}> }>}
  */
-async function deploy({ env, slug = null }) {
+async function deploy({ env, slug = null, dryRun = false }) {
   loadEnv();
 
   if (!env) {
@@ -79,6 +79,18 @@ async function deploy({ env, slug = null }) {
         slug: subSlug,
         status: 'skipped',
         reason: 'file not found'
+      });
+      continue;
+    }
+
+    if (dryRun) {
+      const existingId = subEntry[env]?.n8nId;
+      steps.push({
+        type: 'sub-workflow',
+        slug: subSlug,
+        status: 'success',
+        action: (existingId && !existingId.startsWith('TODO')) ? 'would-update' : 'would-create',
+        id: existingId || '(new)',
       });
       continue;
     }
@@ -148,6 +160,17 @@ async function deploy({ env, slug = null }) {
       continue;
     }
 
+    if (dryRun) {
+      steps.push({
+        type: 'main',
+        slug: wfSlug,
+        status: 'success',
+        action: (envBlock.n8nId && !envBlock.n8nId.startsWith('TODO')) ? 'would-update' : 'would-create',
+        id: envBlock.n8nId || '(new)',
+      });
+      continue;
+    }
+
     try {
       const mainWf = JSON.parse(fs.readFileSync(mainPath, 'utf8'));
       const result = await deploySingle(client, mainWf, envBlock.n8nId);
@@ -178,6 +201,17 @@ async function deploy({ env, slug = null }) {
         error: error.message
       });
     }
+  }
+
+  if (!dryRun) {
+    const { logActivity } = require('./activity-log');
+    logActivity({
+      action: 'deploy',
+      slug: slug || 'all',
+      env,
+      result: steps.some(s => s.status === 'error') ? 'error' : 'success',
+      steps,
+    });
   }
 
   return { env, steps };

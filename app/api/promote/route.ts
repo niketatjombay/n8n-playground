@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { slug, sourceEnv, targetEnv } = body;
+    const { slug, sourceEnv, targetEnv, dryRun } = body;
 
     if (!slug || !sourceEnv || !targetEnv) {
       return NextResponse.json(
@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     }
 
     const { promote } = require('@/n8n/services/promote');
-    const data = await promote({ slug, sourceEnv, targetEnv });
+    const data = await promote({ slug, sourceEnv, targetEnv, dryRun: dryRun || false });
     return NextResponse.json(data);
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

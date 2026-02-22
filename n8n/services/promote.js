@@ -102,7 +102,7 @@ async function deployOne(client, workflow, existingId, envMeta = {}) {
  *   error?: string
  * }>}
  */
-async function promote({ slug, sourceEnv: srcArg, targetEnv: tgtArg }) {
+async function promote({ slug, sourceEnv: srcArg, targetEnv: tgtArg, dryRun = false }) {
   loadEnv();
 
   if (!slug || !srcArg || !tgtArg) {
@@ -197,31 +197,44 @@ async function promote({ slug, sourceEnv: srcArg, targetEnv: tgtArg }) {
       const tgtSubWf = remapWorkflow(srcSubWf, slug, sourceEnv, targetEnv);
 
       // Write remapped file to target directory
-      const tgtSubDir = path.join(process.cwd(), 'n8n', 'workflows', targetEnv, 'sub_workflows');
-      fs.mkdirSync(tgtSubDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(tgtSubDir, `${subSlug}.json`),
-        JSON.stringify(tgtSubWf, null, 2) + '\n'
-      );
+      if (!dryRun) {
+        const tgtSubDir = path.join(process.cwd(), 'n8n', 'workflows', targetEnv, 'sub_workflows');
+        fs.mkdirSync(tgtSubDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(tgtSubDir, `${subSlug}.json`),
+          JSON.stringify(tgtSubWf, null, 2) + '\n'
+        );
+      }
 
-      // Deploy
-      const existingId = subEntry[targetEnv]?.n8nId;
-      const subEnvMeta = subEntry[targetEnv] || {};
-      const result = await deployOne(client, tgtSubWf, existingId, subEnvMeta);
+      if (dryRun) {
+        const existingId = subEntry[targetEnv]?.n8nId;
+        steps.push({
+          type: 'sub-workflow',
+          slug: subSlug,
+          status: 'success',
+          action: (existingId && !existingId.startsWith('TODO')) ? 'would-update' : 'would-create',
+          id: existingId || '(new)',
+        });
+      } else {
+        // Deploy
+        const existingId = subEntry[targetEnv]?.n8nId;
+        const subEnvMeta = subEntry[targetEnv] || {};
+        const result = await deployOne(client, tgtSubWf, existingId, subEnvMeta);
 
-      // Update metadata
-      updateSubWorkflowEnv(subSlug, targetEnv, { n8nId: result.id });
+        // Update metadata
+        updateSubWorkflowEnv(subSlug, targetEnv, { n8nId: result.id });
 
-      const step = {
-        type: 'sub-workflow',
-        slug: subSlug,
-        status: 'success',
-        action: result.action,
-        id: result.id
-      };
-      if (result.movedToFolder) step.movedToFolder = true;
-      if (result.folderWarning) step.folderWarning = result.folderWarning;
-      steps.push(step);
+        const step = {
+          type: 'sub-workflow',
+          slug: subSlug,
+          status: 'success',
+          action: result.action,
+          id: result.id
+        };
+        if (result.movedToFolder) step.movedToFolder = true;
+        if (result.folderWarning) step.folderWarning = result.folderWarning;
+        steps.push(step);
+      }
     } catch (error) {
       steps.push({
         type: 'sub-workflow',
@@ -267,41 +280,65 @@ async function promote({ slug, sourceEnv: srcArg, targetEnv: tgtArg }) {
     const tgtMainWf = remapWorkflow(srcMainWf, slug, sourceEnv, targetEnv);
 
     // Write remapped file to target directory
-    const tgtMainDir = path.join(process.cwd(), 'n8n', 'workflows', targetEnv, slug);
-    fs.mkdirSync(tgtMainDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(tgtMainDir, 'main_workflow.json'),
-      JSON.stringify(tgtMainWf, null, 2) + '\n'
-    );
+    if (!dryRun) {
+      const tgtMainDir = path.join(process.cwd(), 'n8n', 'workflows', targetEnv, slug);
+      fs.mkdirSync(tgtMainDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(tgtMainDir, 'main_workflow.json'),
+        JSON.stringify(tgtMainWf, null, 2) + '\n'
+      );
+    }
 
-    // Deploy — reload metadata for fresh sub-workflow IDs
-    const freshMeta = readMetadata();
-    const existingMainId = freshMeta[slug]?.[targetEnv]?.n8nId;
-    const mainEnvMeta = freshMeta[slug]?.[targetEnv] || {};
-    const mainResult = await deployOne(client, tgtMainWf, existingMainId, mainEnvMeta);
+    if (dryRun) {
+      const freshMeta = readMetadata();
+      const existingMainId = freshMeta[slug]?.[targetEnv]?.n8nId;
+      steps.push({
+        type: 'main',
+        slug,
+        status: 'success',
+        action: (existingMainId && !existingMainId.startsWith('TODO')) ? 'would-update' : 'would-create',
+        id: existingMainId || '(new)',
+      });
+    } else {
+      // Deploy — reload metadata for fresh sub-workflow IDs
+      const freshMeta = readMetadata();
+      const existingMainId = freshMeta[slug]?.[targetEnv]?.n8nId;
+      const mainEnvMeta = freshMeta[slug]?.[targetEnv] || {};
+      const mainResult = await deployOne(client, tgtMainWf, existingMainId, mainEnvMeta);
 
-    // Update metadata
-    updateWorkflowEnv(slug, targetEnv, {
-      n8nId: mainResult.id,
-      lastDeployedAt: new Date().toISOString()
-    });
+      // Update metadata
+      updateWorkflowEnv(slug, targetEnv, {
+        n8nId: mainResult.id,
+        lastDeployedAt: new Date().toISOString()
+      });
 
-    const step = {
-      type: 'main',
-      slug,
-      status: 'success',
-      action: mainResult.action,
-      id: mainResult.id
-    };
-    if (mainResult.movedToFolder) step.movedToFolder = true;
-    if (mainResult.folderWarning) step.folderWarning = mainResult.folderWarning;
-    steps.push(step);
+      const step = {
+        type: 'main',
+        slug,
+        status: 'success',
+        action: mainResult.action,
+        id: mainResult.id
+      };
+      if (mainResult.movedToFolder) step.movedToFolder = true;
+      if (mainResult.folderWarning) step.folderWarning = mainResult.folderWarning;
+      steps.push(step);
+    }
   } catch (error) {
     steps.push({
       type: 'main',
       slug,
       status: 'error',
       error: error.message
+    });
+
+    const { logActivity } = require('./activity-log');
+    logActivity({
+      action: 'promote',
+      slug,
+      env: targetEnv,
+      result: 'error',
+      details: { sourceEnv, targetEnv },
+      steps,
     });
 
     return {
@@ -312,6 +349,18 @@ async function promote({ slug, sourceEnv: srcArg, targetEnv: tgtArg }) {
       steps,
       error: error.message
     };
+  }
+
+  if (!dryRun) {
+    const { logActivity } = require('./activity-log');
+    logActivity({
+      action: 'promote',
+      slug,
+      env: targetEnv,
+      result: 'success',
+      details: { sourceEnv, targetEnv },
+      steps,
+    });
   }
 
   return {
