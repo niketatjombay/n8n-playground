@@ -5,8 +5,17 @@
   "scripts": {
     "dev": "next dev --port 3001",
     "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "start": "next start --port 3001",
+    "lint": "eslint",
+    "n8n:list": "node n8n/scripts/list-workflows.js",
+    "n8n:list:grouped": "node n8n/scripts/list-workflows.js --grouped",
+    "n8n:deploy": "node n8n/scripts/deploy.js",
+    "n8n:backup": "node n8n/scripts/backup.js",
+    "n8n:test": "node n8n/scripts/test-connection.js",
+    "n8n:promote": "node n8n/scripts/promote.js",
+    "n8n:status": "node n8n/scripts/status.js",
+    "n8n:activate": "node n8n/scripts/activate.js",
+    "n8n:test-workflow": "node n8n/scripts/test-workflow.js"
   },
   "dependencies": {
     "next": "16.1.6",
