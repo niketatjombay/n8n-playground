@@ -232,6 +232,19 @@ async function promote({ slug, sourceEnv: srcArg, targetEnv: tgtArg }) {
     }
   }
 
+  // Abort if any sub-workflow failed
+  const subErrors = steps.filter(s => s.type === 'sub-workflow' && s.status === 'error');
+  if (subErrors.length > 0) {
+    return {
+      success: false,
+      slug,
+      sourceEnv,
+      targetEnv,
+      steps,
+      error: `${subErrors.length} sub-workflow(s) failed — aborting main workflow promotion`
+    };
+  }
+
   // --- Promote main workflow ---
   const mainPath = path.join(
     process.cwd(), 'n8n', 'workflows', sourceEnv, slug, 'main_workflow.json'
