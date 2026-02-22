@@ -50,7 +50,9 @@ export default function OperationLog({ steps }: OperationLogProps) {
               {step.status === 'success' && (
                 <>
                   {step.action && (
-                    <span className="text-emerald-400">{step.action}</span>
+                    <span className={step.action.startsWith('would-') ? 'text-blue-400' : 'text-emerald-400'}>
+                      {step.action}
+                    </span>
                   )}
                   {step.id && (
                     <span className="text-zinc-400 ml-2">id: {step.id}</span>

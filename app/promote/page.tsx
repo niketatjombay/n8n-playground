@@ -31,6 +31,7 @@ function PromoteForm() {
   const [error, setError] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [diffData, setDiffData] = useState<any>(null);
 
   // Pre-select from URL param once slugs are loaded
   useEffect(() => {
@@ -55,6 +56,44 @@ function PromoteForm() {
       setValidationError(null);
     }
   }, [sourceEnv, targetEnv]);
+
+  const handlePreview = async () => {
+    if (!slug || validationError) return;
+    setLoading(true);
+    setSteps([]);
+    setError(null);
+    try {
+      const res = await fetch('/api/promote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug, sourceEnv, targetEnv, dryRun: true }),
+      });
+      const json = await res.json();
+      if (json.success && json.data) {
+        const resultSteps = json.data.steps || json.data;
+        setSteps(Array.isArray(resultSteps) ? resultSteps : []);
+      } else if (json.steps) {
+        setSteps(json.steps);
+      } else {
+        setError(json.error || 'Preview failed');
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleViewChanges = async () => {
+    if (!slug || !sourceEnv || !targetEnv || validationError) return;
+    try {
+      const res = await fetch(`/api/promote/preview?slug=${slug}&sourceEnv=${sourceEnv}&targetEnv=${targetEnv}`);
+      const json = await res.json();
+      if (json.success) {
+        setDiffData(json);
+      }
+    } catch {}
+  };
 
   const handlePromote = async () => {
     if (!slug || validationError) return;
@@ -149,14 +188,49 @@ function PromoteForm() {
           )}
         </div>
 
-        {/* Promote button */}
-        <button
-          onClick={() => setShowConfirm(true)}
-          disabled={loading || !slug || !!validationError}
-          className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
-        >
-          {loading ? 'Promoting...' : 'Promote'}
-        </button>
+        {slug && !validationError && (
+          <button
+            onClick={handleViewChanges}
+            className="text-sm text-blue-400 hover:text-blue-300 underline"
+          >
+            View Changes
+          </button>
+        )}
+
+        {diffData && (
+          <div className="mt-4 bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+            <div className="px-4 py-3 border-b border-zinc-800">
+              <h3 className="text-sm font-medium text-zinc-300">Changes Preview</h3>
+            </div>
+            <div className="divide-y divide-zinc-800/50">
+              {diffData.changes.map((change: any, i: number) => (
+                <div key={i} className="px-4 py-2.5 grid grid-cols-3 gap-2 text-xs font-mono">
+                  <span className="text-zinc-400">{change.field}</span>
+                  <span className="text-red-400">{change.from}</span>
+                  <span className="text-emerald-400">{change.to}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Promote buttons */}
+        <div className="flex gap-3">
+          <button
+            onClick={handlePreview}
+            disabled={loading || !slug || !!validationError}
+            className="px-5 py-2.5 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            {loading ? 'Checking...' : 'Preview Changes'}
+          </button>
+          <button
+            onClick={() => setShowConfirm(true)}
+            disabled={loading || !slug || !!validationError}
+            className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            {loading ? 'Promoting...' : 'Promote'}
+          </button>
+        </div>
       </div>
 
       {error && (

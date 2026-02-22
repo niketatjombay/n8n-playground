@@ -12,7 +12,7 @@ function DeployForm() {
   const searchParams = useSearchParams();
   const { slugs, statusLoading, statusError, refetchStatus } = useStatusFetch();
   const [env, setEnv] = useState('development');
-  const [slug, setSlug] = useState('');
+  const [selectedSlugs, setSelectedSlugs] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [steps, setSteps] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -22,27 +22,63 @@ function DeployForm() {
   useEffect(() => {
     const paramSlug = searchParams.get('slug');
     if (paramSlug && slugs.includes(paramSlug)) {
-      setSlug(paramSlug);
+      setSelectedSlugs([paramSlug]);
     }
   }, [searchParams, slugs]);
+
+  const handlePreview = async () => {
+    setLoading(true);
+    setSteps([]);
+    setError(null);
+    try {
+      const slugsToProcess = selectedSlugs.length > 0 ? selectedSlugs : [null];
+      const allSteps: any[] = [];
+      for (const s of slugsToProcess) {
+        const res = await fetch('/api/deploy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ env, slug: s, dryRun: true }),
+        });
+        const json = await res.json();
+        if (json.success && json.data) {
+          const resultSteps = json.data.steps || json.data;
+          if (Array.isArray(resultSteps)) allSteps.push(...resultSteps);
+        } else {
+          setError(json.error || 'Preview failed');
+          break;
+        }
+      }
+      setSteps(allSteps);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleDeploy = async () => {
     setLoading(true);
     setSteps([]);
     setError(null);
     try {
-      const res = await fetch('/api/deploy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ env, slug: slug || null }),
-      });
-      const json = await res.json();
-      if (json.success && json.data) {
-        const resultSteps = json.data.steps || json.data;
-        setSteps(Array.isArray(resultSteps) ? resultSteps : []);
-      } else {
-        setError(json.error || 'Deploy failed');
+      const slugsToProcess = selectedSlugs.length > 0 ? selectedSlugs : [null];
+      const allSteps: any[] = [];
+      for (const s of slugsToProcess) {
+        const res = await fetch('/api/deploy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ env, slug: s }),
+        });
+        const json = await res.json();
+        if (json.success && json.data) {
+          const resultSteps = json.data.steps || json.data;
+          if (Array.isArray(resultSteps)) allSteps.push(...resultSteps);
+        } else {
+          setError(json.error || 'Deploy failed');
+          break;
+        }
       }
+      setSteps(allSteps);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -78,31 +114,50 @@ function DeployForm() {
 
         {/* Workflow select */}
         <div>
-          <label className="block text-sm font-medium text-zinc-300 mb-1.5">
-            Workflow
-          </label>
-          <select
-            value={slug}
-            onChange={(e) => setSlug(e.target.value)}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-          >
-            <option value="">All workflows</option>
+          <label className="block text-sm font-medium text-zinc-300 mb-1.5">Workflows</label>
+          <div className="space-y-1.5 max-h-48 overflow-y-auto bg-zinc-900 border border-zinc-800 rounded-lg p-3">
+            <div className="flex gap-3 mb-2 pb-2 border-b border-zinc-800">
+              <button type="button" onClick={() => setSelectedSlugs([...slugs])} className="text-xs text-blue-400 hover:text-blue-300">
+                Select All
+              </button>
+              <button type="button" onClick={() => setSelectedSlugs([])} className="text-xs text-zinc-400 hover:text-zinc-300">
+                Deselect All
+              </button>
+            </div>
             {slugs.map((s) => (
-              <option key={s} value={s}>
+              <label key={s} className="flex items-center gap-2 text-sm text-zinc-200 cursor-pointer hover:text-zinc-100">
+                <input
+                  type="checkbox"
+                  checked={selectedSlugs.includes(s)}
+                  onChange={(e) => {
+                    if (e.target.checked) setSelectedSlugs([...selectedSlugs, s]);
+                    else setSelectedSlugs(selectedSlugs.filter(x => x !== s));
+                  }}
+                  className="rounded border-zinc-700 bg-zinc-800"
+                />
                 {s}
-              </option>
+              </label>
             ))}
-          </select>
+          </div>
         </div>
 
-        {/* Deploy button */}
-        <button
-          onClick={() => setShowConfirm(true)}
-          disabled={loading}
-          className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
-        >
-          {loading ? 'Deploying...' : 'Deploy'}
-        </button>
+        {/* Deploy buttons */}
+        <div className="flex gap-3">
+          <button
+            onClick={handlePreview}
+            disabled={loading}
+            className="px-5 py-2.5 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            {loading ? 'Checking...' : 'Preview Changes'}
+          </button>
+          <button
+            onClick={() => setShowConfirm(true)}
+            disabled={loading}
+            className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            {loading ? 'Deploying...' : 'Deploy'}
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -120,7 +175,7 @@ function DeployForm() {
       <ConfirmDialog
         open={showConfirm}
         title="Deploy Workflows"
-        message={`Deploy ${slug || 'all workflows'} to ${env}?${
+        message={`Deploy ${selectedSlugs.length > 0 ? selectedSlugs.length + ' workflow(s)' : 'all workflows'} to ${env}?${
           env === 'production' ? '\n\nYou are about to deploy to PRODUCTION.' : ''
         }`}
         confirmLabel="Deploy"
