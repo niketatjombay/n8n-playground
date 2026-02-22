@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { useStatusFetch, StatusError } from '@/components/StatusFetcher';
 
 const ENVIRONMENTS = ['development', 'staging', 'production'];
@@ -12,6 +13,8 @@ export default function ActivatePage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [pendingDeactivate, setPendingDeactivate] = useState(false);
 
   const currentStatus = (() => {
     if (!slug || !workflows.length) return null;
@@ -99,14 +102,14 @@ export default function ActivatePage() {
 
         <div className="flex gap-3">
           <button
-            onClick={() => handleToggle(false)}
+            onClick={() => { setPendingDeactivate(false); setShowConfirm(true); }}
             disabled={loading || !slug || !currentStatus}
             className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
           >
             {loading ? 'Processing...' : 'Activate'}
           </button>
           <button
-            onClick={() => handleToggle(true)}
+            onClick={() => { setPendingDeactivate(true); setShowConfirm(true); }}
             disabled={loading || !slug || !currentStatus}
             className="px-5 py-2.5 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
           >
@@ -126,6 +129,21 @@ export default function ActivatePage() {
           Workflow {result.slug} is now {result.active ? 'active' : 'inactive'} in {result.env}
         </div>
       )}
+
+      <ConfirmDialog
+        open={showConfirm}
+        title={pendingDeactivate ? 'Deactivate Workflow' : 'Activate Workflow'}
+        message={`${pendingDeactivate ? 'Deactivate' : 'Activate'} ${slug} in ${env}?${
+          env === 'production' ? '\n\nThis will affect the PRODUCTION environment.' : ''
+        }`}
+        confirmLabel={pendingDeactivate ? 'Deactivate' : 'Activate'}
+        destructive={pendingDeactivate || env === 'production'}
+        onConfirm={() => {
+          setShowConfirm(false);
+          handleToggle(pendingDeactivate);
+        }}
+        onCancel={() => setShowConfirm(false)}
+      />
     </div>
   );
 }

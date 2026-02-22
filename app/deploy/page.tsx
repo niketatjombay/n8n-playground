@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import OperationLog from '@/components/OperationLog';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { useStatusFetch, StatusError } from '@/components/StatusFetcher';
 
 const ENVIRONMENTS = ['development', 'staging', 'production'];
@@ -15,6 +16,7 @@ function DeployForm() {
   const [loading, setLoading] = useState(false);
   const [steps, setSteps] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   // Pre-select from URL param once slugs are loaded
   useEffect(() => {
@@ -95,7 +97,7 @@ function DeployForm() {
 
         {/* Deploy button */}
         <button
-          onClick={handleDeploy}
+          onClick={() => setShowConfirm(true)}
           disabled={loading}
           className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
         >
@@ -114,6 +116,21 @@ function DeployForm() {
           <OperationLog steps={steps} />
         </div>
       )}
+
+      <ConfirmDialog
+        open={showConfirm}
+        title="Deploy Workflows"
+        message={`Deploy ${slug || 'all workflows'} to ${env}?${
+          env === 'production' ? '\n\nYou are about to deploy to PRODUCTION.' : ''
+        }`}
+        confirmLabel="Deploy"
+        destructive={env === 'production'}
+        onConfirm={() => {
+          setShowConfirm(false);
+          handleDeploy();
+        }}
+        onCancel={() => setShowConfirm(false)}
+      />
     </>
   );
 }

@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import OperationLog from '@/components/OperationLog';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { useStatusFetch, StatusError } from '@/components/StatusFetcher';
 
 const ENVIRONMENTS = ['development', 'staging', 'production'];
@@ -29,6 +30,7 @@ function PromoteForm() {
   const [steps, setSteps] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   // Pre-select from URL param once slugs are loaded
   useEffect(() => {
@@ -149,7 +151,7 @@ function PromoteForm() {
 
         {/* Promote button */}
         <button
-          onClick={handlePromote}
+          onClick={() => setShowConfirm(true)}
           disabled={loading || !slug || !!validationError}
           className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
         >
@@ -168,6 +170,21 @@ function PromoteForm() {
           <OperationLog steps={steps} />
         </div>
       )}
+
+      <ConfirmDialog
+        open={showConfirm}
+        title="Promote Workflow"
+        message={`Promote ${slug} from ${sourceEnv} to ${targetEnv}?${
+          targetEnv === 'production' ? '\n\nYou are about to promote to PRODUCTION.' : ''
+        }`}
+        confirmLabel="Promote"
+        destructive={targetEnv === 'production'}
+        onConfirm={() => {
+          setShowConfirm(false);
+          handlePromote();
+        }}
+        onCancel={() => setShowConfirm(false)}
+      />
     </>
   );
 }
