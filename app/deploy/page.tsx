@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import OperationLog from '@/components/OperationLog';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { useStatusFetch, StatusError } from '@/components/StatusFetcher';
+import { apiFetch } from '@/lib/api';
 
 const ENVIRONMENTS = ['development', 'staging', 'production'];
 
@@ -34,7 +35,7 @@ function DeployForm() {
       const slugsToProcess = selectedSlugs.length > 0 ? selectedSlugs : [null];
       const allSteps: any[] = [];
       for (const s of slugsToProcess) {
-        const res = await fetch('/api/deploy', {
+        const res = await apiFetch('/api/deploy', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ env, slug: s, dryRun: true }),
@@ -64,7 +65,7 @@ function DeployForm() {
       const slugsToProcess = selectedSlugs.length > 0 ? selectedSlugs : [null];
       const allSteps: any[] = [];
       for (const s of slugsToProcess) {
-        const res = await fetch('/api/deploy', {
+        const res = await apiFetch('/api/deploy', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ env, slug: s }),

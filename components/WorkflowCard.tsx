@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import EnvironmentBadge from './EnvironmentBadge';
+import { apiFetch } from '@/lib/api';
 
 interface EnvStatus {
   n8nId: string | null;
@@ -48,7 +49,7 @@ export default function WorkflowCard({ workflow, envList, onStatusChange }: Work
   const handleToggle = async (env: string, active: boolean) => {
     setTogglingEnv(env);
     try {
-      const res = await fetch('/api/activate', {
+      const res = await apiFetch('/api/activate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ slug: workflow.slug, env, deactivate: active }),

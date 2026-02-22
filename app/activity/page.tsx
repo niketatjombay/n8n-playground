@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useStatusFetch } from '@/components/StatusFetcher';
+import { apiFetch } from '@/lib/api';
 
 interface ActivityEntry {
   timestamp: string;
@@ -27,7 +28,7 @@ export default function ActivityPage() {
     if (filterAction !== 'all') params.set('action', filterAction);
     if (filterSlug) params.set('slug', filterSlug);
 
-    fetch(`/api/activity?${params}`)
+    apiFetch(`/api/activity?${params}`)
       .then(res => res.json())
       .then(json => {
         if (json.success) setEntries(json.entries);

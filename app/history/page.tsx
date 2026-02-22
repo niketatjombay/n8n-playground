@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useStatusFetch, StatusError } from '@/components/StatusFetcher';
+import { apiFetch } from '@/lib/api';
 
 const ENVIRONMENTS = ['development', 'staging', 'production'];
 
@@ -30,7 +31,7 @@ export default function HistoryPage() {
     setExpandedCommit(null);
     setVersionContent(null);
     try {
-      const res = await fetch(`/api/history?slug=${slug}&env=${env}&limit=20`);
+      const res = await apiFetch(`/api/history?slug=${slug}&env=${env}&limit=20`);
       const json = await res.json();
       if (json.success) {
         setCommits(json.commits || []);
@@ -52,7 +53,7 @@ export default function HistoryPage() {
     }
     setExpandedCommit(hash);
     try {
-      const res = await fetch(`/api/history?slug=${slug}&env=${env}&commit=${hash}`);
+      const res = await apiFetch(`/api/history?slug=${slug}&env=${env}&commit=${hash}`);
       const json = await res.json();
       if (json.success) {
         setVersionContent(json.content);

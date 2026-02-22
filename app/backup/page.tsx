@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import OperationLog from '@/components/OperationLog';
 import { useStatusFetch, StatusError } from '@/components/StatusFetcher';
+import { apiFetch } from '@/lib/api';
 
 const ENVIRONMENTS = ['development', 'staging', 'production'];
 
@@ -22,7 +23,7 @@ export default function BackupPage() {
       const slugsToProcess = selectedSlugs.length > 0 ? selectedSlugs : [null];
       const allSteps: any[] = [];
       for (const s of slugsToProcess) {
-        const res = await fetch('/api/backup', {
+        const res = await apiFetch('/api/backup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ env, slug: s }),

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import EnvironmentBadge from '@/components/EnvironmentBadge';
+import { apiFetch } from '@/lib/api';
 
 interface FlatWorkflow {
   id: string;
@@ -46,7 +47,7 @@ export default function WorkflowsPage() {
     setLoading(true);
     setError(null);
     const url = grouped ? '/api/workflows?grouped=true' : '/api/workflows';
-    fetch(url)
+    apiFetch(url)
       .then((res) => res.json())
       .then((json) => {
         if (!json.success) {

@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useStatusFetch, StatusError } from '@/components/StatusFetcher';
+import { apiFetch } from '@/lib/api';
 
 const ENVIRONMENTS = ['development', 'staging', 'production'];
 
@@ -14,13 +15,22 @@ interface TestResponse {
 }
 
 export default function TestPage() {
-  const { slugs, statusLoading, statusError, refetchStatus } = useStatusFetch();
+  const { slugs, workflows, statusLoading, statusError, refetchStatus } = useStatusFetch();
   const [slug, setSlug] = useState('');
   const [env, setEnv] = useState('development');
   const [payload, setPayload] = useState('{\n  \n}');
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<TestResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Pre-populate payload when workflow slug changes
+  useEffect(() => {
+    if (!slug) return;
+    const wf = workflows.find((w: any) => w.slug === slug);
+    if (wf?.input) {
+      setPayload(JSON.stringify(wf.input, null, 2));
+    }
+  }, [slug, workflows]);
 
   const handleTrigger = async () => {
     if (!slug) return;
@@ -41,7 +51,7 @@ export default function TestPage() {
     }
 
     try {
-      const res = await fetch('/api/test', {
+      const res = await apiFetch('/api/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ slug, env, payload: parsedPayload }),

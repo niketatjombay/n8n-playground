@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import WorkflowCard from '@/components/WorkflowCard';
 import EnvironmentBadge from '@/components/EnvironmentBadge';
+import { apiFetch } from '@/lib/api';
 
 interface StatusData {
   subWorkflows: Array<{
@@ -29,7 +30,7 @@ export default function DashboardPage() {
 
   const fetchData = () => {
     setLoading(true);
-    fetch('/api/status')
+    apiFetch('/api/status')
       .then((res) => res.json())
       .then((json) => {
         if (json.success) {

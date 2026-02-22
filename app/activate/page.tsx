@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { useStatusFetch, StatusError } from '@/components/StatusFetcher';
+import { apiFetch } from '@/lib/api';
 
 const ENVIRONMENTS = ['development', 'staging', 'production'];
 
@@ -31,7 +32,7 @@ export default function ActivatePage() {
     setResult(null);
     setError(null);
     try {
-      const res = await fetch('/api/activate', {
+      const res = await apiFetch('/api/activate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ slug, env, deactivate }),

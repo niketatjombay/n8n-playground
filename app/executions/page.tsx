@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useStatusFetch, StatusError } from '@/components/StatusFetcher';
+import { apiFetch } from '@/lib/api';
 
 const ENVIRONMENTS = ['development', 'staging', 'production'];
 
@@ -42,7 +43,7 @@ export default function ExecutionsPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/executions?slug=${slug}&env=${env}&limit=20`);
+      const res = await apiFetch(`/api/executions?slug=${slug}&env=${env}&limit=20`);
       const json = await res.json();
       if (json.success) {
         setExecutions(json.executions);

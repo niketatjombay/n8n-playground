@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import OperationLog from '@/components/OperationLog';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { useStatusFetch, StatusError } from '@/components/StatusFetcher';
+import { apiFetch } from '@/lib/api';
 
 const ENVIRONMENTS = ['development', 'staging', 'production'];
 
@@ -63,7 +64,7 @@ function PromoteForm() {
     setSteps([]);
     setError(null);
     try {
-      const res = await fetch('/api/promote', {
+      const res = await apiFetch('/api/promote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ slug, sourceEnv, targetEnv, dryRun: true }),
@@ -87,7 +88,7 @@ function PromoteForm() {
   const handleViewChanges = async () => {
     if (!slug || !sourceEnv || !targetEnv || validationError) return;
     try {
-      const res = await fetch(`/api/promote/preview?slug=${slug}&sourceEnv=${sourceEnv}&targetEnv=${targetEnv}`);
+      const res = await apiFetch(`/api/promote/preview?slug=${slug}&sourceEnv=${sourceEnv}&targetEnv=${targetEnv}`);
       const json = await res.json();
       if (json.success) {
         setDiffData(json);
@@ -101,7 +102,7 @@ function PromoteForm() {
     setSteps([]);
     setError(null);
     try {
-      const res = await fetch('/api/promote', {
+      const res = await apiFetch('/api/promote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ slug, sourceEnv, targetEnv }),
