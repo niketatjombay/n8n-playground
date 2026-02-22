@@ -83,6 +83,7 @@ function getStatus(slugFilter = null) {
       slug,
       description: entry.description || null,
       usesSubWorkflows: entry.uses_sub_workflows || [],
+      input: entry.input || null,
       environments
     });
   }
