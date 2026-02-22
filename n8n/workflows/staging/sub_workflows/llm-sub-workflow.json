@@ -1,0 +1,552 @@
+{
+  "updatedAt": "2026-02-20T15:52:33.988Z",
+  "createdAt": "2026-02-06T12:22:54.027Z",
+  "id": "GDaWNcJJtLdY8Q6Y4Yv5p",
+  "name": "[STG] LLM Sub-workflow",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "workflow_session_id",
+              "type": "any"
+            },
+            {
+              "name": "workflow_id",
+              "type": "any"
+            },
+            {
+              "name": "project_id",
+              "type": "any"
+            },
+            {
+              "name": "client_id",
+              "type": "any"
+            },
+            {
+              "name": "prompt",
+              "type": "any"
+            },
+            {
+              "name": "model",
+              "type": "string"
+            },
+            {
+              "name": "node_name",
+              "type": "string"
+            },
+            {
+              "name": "memory_id",
+              "type": "any"
+            },
+            {
+              "name": "knowledge_base_id",
+              "type": "any"
+            },
+            {
+              "name": "system_prompt",
+              "type": "any"
+            }
+          ]
+        }
+      },
+      "id": "951675a3-92b6-4774-8059-cc752e7fb8f3",
+      "typeVersion": 1.1,
+      "name": "Start",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [
+        -768,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://agentcoreapi.jombay.com",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ (() => {\n  const PREFIX = 'Return raw JSON only. Do not use ```json or ``` markdown formatting.\\n\\n';\n  const SUFFIX = '\\n\\nCRITICAL RULES FOR OUTPUT:\\n- NO markdown code fences (no ```json or ```)\\n- NO explanations, preambles, or postambles\\n- NO text before or after the JSON\\n- NO comments inside the JSON\\n- Output must be ONLY valid JSON\\n- Output MUST start with { or [\\n- Output MUST end with } or ]';\n  const fullPrompt = PREFIX + $json.prompt + SUFFIX;\n  const sessionId = $json.workflow_session_id || 'session_default';\n  const runtimeId = 'runtime_session_' + sessionId + '_' + Date.now();\n  const payload = {\n    prompt: fullPrompt,\n    workflow_id: $json.workflow_id || 'workflow_default',\n    client_id: $json.client_id || 'client_default',\n    project_id: $json.project_id || 'project_default',\n    workflow_session_id: sessionId,\n    model: $json.model || 'global.anthropic.claude-haiku-4-5-20251001-v1:0',\n    runtimeSessionId: runtimeId\n  };\n  if ($json.memory_id) payload.memory_id = $json.memory_id;\n  if ($json.knowledge_base_id) payload.knowledge_base_id = $json.knowledge_base_id;\n  if ($json.system_prompt) payload.system_prompt = $json.system_prompt;\n  return JSON.stringify(payload);\n})() }}",
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -560,
+        144
+      ],
+      "id": "a1e4c083-2b0a-4165-ac64-b4b1d6d599bf",
+      "name": "HTTP Request",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generic LLM response parser\n// Returns { llm_response: parsedJson } on success\n// Throws error with raw response on failure (for debugging)\n\nconst httpResponse = $input.first().json;\nconst startData = $('Start').item.json;\nconst nodeName = startData.node_name || 'Unknown';\n\n// Robust JSON parsing function - handles various LLM response formats\nfunction parseJsonRobust(response) {\n  if (!response) return null;\n  \n  let cleaned = typeof response === 'string' ? response : String(response);\n  cleaned = cleaned.trim();\n  \n  // Try 1: Parse as-is\n  try { return JSON.parse(cleaned); } catch (e) {}\n  \n  // Try 2: Remove markdown code fences with json identifier (handles ```json [line 86] etc)\n  if (cleaned.startsWith('```json')) {\n    const withoutFences = cleaned.replace(/^```json[^\\n]*\\n?/, '').replace(/\\n?```\\s*$/, '').trim();\n    try { return JSON.parse(withoutFences); } catch (e) {}\n  }\n  \n  // Try 3: Remove generic markdown code fences\n  if (cleaned.startsWith('```')) {\n    const withoutFences = cleaned.replace(/^```[^\\n]*\\n?/, '').replace(/\\n?```\\s*$/, '').trim();\n    try { return JSON.parse(withoutFences); } catch (e) {}\n  }\n  \n  // Try 4: Find JSON block between any code fences (handles annotations like [line X])\n  const codeBlockMatch = cleaned.match(/```(?:json)?[^\\n]*\\n?([\\s\\S]*?)\\n?```/);\n  if (codeBlockMatch && codeBlockMatch[1]) {\n    try { return JSON.parse(codeBlockMatch[1].trim()); } catch (e) {}\n  }\n  \n  // Try 5: Remove common prefixes\n  const prefixPatterns = [/^Here's the JSON:?\\s*/i, /^Here is the JSON:?\\s*/i, /^JSON:?\\s*/i, /^Response:?\\s*/i, /^Output:?\\s*/i, /^Result:?\\s*/i];\n  for (const pattern of prefixPatterns) {\n    if (pattern.test(cleaned)) {\n      const withoutPrefix = cleaned.replace(pattern, '').trim();\n      try { return JSON.parse(withoutPrefix); } catch (e) {\n        const withoutFences = withoutPrefix.replace(/^```(?:json)?[^\\n]*\\n?/, '').replace(/\\n?```\\s*$/, '').trim();\n        try { return JSON.parse(withoutFences); } catch (e2) {}\n      }\n    }\n  }\n  \n  // Try 6: Extract JSON from surrounding text (most permissive - find first { or [ to last } or ])\n  const jsonStartBrace = cleaned.indexOf('{');\n  const jsonStartBracket = cleaned.indexOf('[');\n  const jsonStart = jsonStartBrace !== -1 && jsonStartBracket !== -1 ? Math.min(jsonStartBrace, jsonStartBracket) : Math.max(jsonStartBrace, jsonStartBracket);\n  const jsonEndBrace = cleaned.lastIndexOf('}');\n  const jsonEndBracket = cleaned.lastIndexOf(']');\n  const jsonEnd = jsonEndBrace !== -1 && jsonEndBracket !== -1 ? Math.max(jsonEndBrace, jsonEndBracket) : Math.max(jsonEndBrace, jsonEndBracket);\n  \n  if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {\n    const extracted = cleaned.substring(jsonStart, jsonEnd + 1);\n    try { return JSON.parse(extracted); } catch (e) {\n      // Try fixing common JSON issues\n      const fixed = extracted.replace(/,\\s*}/g, '}').replace(/,\\s*]/g, ']').replace(/([{,]\\s*)(\\w+)(\\s*:)/g, '$1\"$2\"$3');\n      try { return JSON.parse(fixed); } catch (e2) {}\n    }\n  }\n  \n  return null;\n}\n\n// Check HTTP Status\nif (httpResponse.statusCode && httpResponse.statusCode >= 400) {\n  throw new Error(`[${nodeName}] HTTP ${httpResponse.statusCode}: ${httpResponse.body?.error || 'No details'}`);\n}\n\n// Extract agent_response\nlet agentResponse = httpResponse.body?.agent_response || httpResponse.agent_response || httpResponse.body?.response || httpResponse.response;\nif (!agentResponse && typeof httpResponse.body === 'string') agentResponse = httpResponse.body;\n\nif (!agentResponse) {\n  if (httpResponse.body?.error) throw new Error(`[${nodeName}] API error: ${httpResponse.body.error}`);\n  throw new Error(`[${nodeName}] No agent_response in HTTP response. Keys: ${Object.keys(httpResponse.body || {}).join(', ')}`);\n}\n\n// Parse JSON\nconst parsedJson = parseJsonRobust(agentResponse);\nif (!parsedJson) {\n  // Include raw LLM response in error for debugging\n  throw new Error(`[${nodeName}] JSON parse failed. Raw response: ${String(agentResponse).substring(0, 500)}`);\n}\n\n// Return wrapped in llm_response key (no validation, no merging)\nreturn [{ json: { llm_response: parsedJson } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -352,
+        144
+      ],
+      "id": "07f063ee-5ea1-4300-980c-53f40a7172c5",
+      "name": "Parse JSON Response",
+      "notes": "Generic parser - returns { llm_response: parsedJson }"
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Parse JSON Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {},
+  "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+  "activeVersionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+  "versionCounter": 126,
+  "triggerCount": 0,
+  "shared": [
+    {
+      "updatedAt": "2026-02-06T12:22:54.027Z",
+      "createdAt": "2026-02-06T12:22:54.027Z",
+      "role": "workflow:owner",
+      "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+      "projectId": "JIV2elLHsVFXybZ2",
+      "project": {
+        "updatedAt": "2025-12-05T03:44:52.986Z",
+        "createdAt": "2025-12-05T02:56:21.571Z",
+        "id": "JIV2elLHsVFXybZ2",
+        "name": "Niket Puranik <niket@jombay.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-02-19T13:59:37.316Z",
+    "createdAt": "2026-02-19T13:59:37.316Z",
+    "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+    "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+    "nodes": [
+      {
+        "parameters": {
+          "workflowInputs": {
+            "values": [
+              {
+                "name": "workflow_session_id",
+                "type": "any"
+              },
+              {
+                "name": "workflow_id",
+                "type": "any"
+              },
+              {
+                "name": "project_id",
+                "type": "any"
+              },
+              {
+                "name": "client_id",
+                "type": "any"
+              },
+              {
+                "name": "prompt",
+                "type": "any"
+              },
+              {
+                "name": "model",
+                "type": "string"
+              },
+              {
+                "name": "node_name",
+                "type": "string"
+              },
+              {
+                "name": "memory_id",
+                "type": "any"
+              },
+              {
+                "name": "knowledge_base_id",
+                "type": "any"
+              },
+              {
+                "name": "system_prompt",
+                "type": "any"
+              }
+            ]
+          }
+        },
+        "id": "951675a3-92b6-4774-8059-cc752e7fb8f3",
+        "typeVersion": 1.1,
+        "name": "Start",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "position": [
+          -768,
+          144
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://agentcoreapi.jombay.com",
+          "sendBody": true,
+          "contentType": "raw",
+          "rawContentType": "application/json",
+          "body": "={{ (() => {\n  const PREFIX = 'Return raw JSON only. Do not use ```json or ``` markdown formatting.\\n\\n';\n  const SUFFIX = '\\n\\nCRITICAL RULES FOR OUTPUT:\\n- NO markdown code fences (no ```json or ```)\\n- NO explanations, preambles, or postambles\\n- NO text before or after the JSON\\n- NO comments inside the JSON\\n- Output must be ONLY valid JSON\\n- Output MUST start with { or [\\n- Output MUST end with } or ]';\n  const fullPrompt = PREFIX + $json.prompt + SUFFIX;\n  const sessionId = $json.workflow_session_id || 'session_default';\n  const runtimeId = 'runtime_session_' + sessionId + '_' + Date.now();\n  const payload = {\n    prompt: fullPrompt,\n    workflow_id: $json.workflow_id || 'workflow_default',\n    client_id: $json.client_id || 'client_default',\n    project_id: $json.project_id || 'project_default',\n    workflow_session_id: sessionId,\n    model: $json.model || 'global.anthropic.claude-haiku-4-5-20251001-v1:0',\n    runtimeSessionId: runtimeId\n  };\n  if ($json.memory_id) payload.memory_id = $json.memory_id;\n  if ($json.knowledge_base_id) payload.knowledge_base_id = $json.knowledge_base_id;\n  if ($json.system_prompt) payload.system_prompt = $json.system_prompt;\n  return JSON.stringify(payload);\n})() }}",
+          "options": {
+            "timeout": 600000
+          }
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.3,
+        "position": [
+          -560,
+          144
+        ],
+        "id": "a1e4c083-2b0a-4165-ac64-b4b1d6d599bf",
+        "name": "HTTP Request",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 3000,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Generic LLM response parser\n// Returns { llm_response: parsedJson } on success\n// Throws error with raw response on failure (for debugging)\n\nconst httpResponse = $input.first().json;\nconst startData = $('Start').item.json;\nconst nodeName = startData.node_name || 'Unknown';\n\n// Robust JSON parsing function - handles various LLM response formats\nfunction parseJsonRobust(response) {\n  if (!response) return null;\n  \n  let cleaned = typeof response === 'string' ? response : String(response);\n  cleaned = cleaned.trim();\n  \n  // Try 1: Parse as-is\n  try { return JSON.parse(cleaned); } catch (e) {}\n  \n  // Try 2: Remove markdown code fences with json identifier (handles ```json [line 86] etc)\n  if (cleaned.startsWith('```json')) {\n    const withoutFences = cleaned.replace(/^```json[^\\n]*\\n?/, '').replace(/\\n?```\\s*$/, '').trim();\n    try { return JSON.parse(withoutFences); } catch (e) {}\n  }\n  \n  // Try 3: Remove generic markdown code fences\n  if (cleaned.startsWith('```')) {\n    const withoutFences = cleaned.replace(/^```[^\\n]*\\n?/, '').replace(/\\n?```\\s*$/, '').trim();\n    try { return JSON.parse(withoutFences); } catch (e) {}\n  }\n  \n  // Try 4: Find JSON block between any code fences (handles annotations like [line X])\n  const codeBlockMatch = cleaned.match(/```(?:json)?[^\\n]*\\n?([\\s\\S]*?)\\n?```/);\n  if (codeBlockMatch && codeBlockMatch[1]) {\n    try { return JSON.parse(codeBlockMatch[1].trim()); } catch (e) {}\n  }\n  \n  // Try 5: Remove common prefixes\n  const prefixPatterns = [/^Here's the JSON:?\\s*/i, /^Here is the JSON:?\\s*/i, /^JSON:?\\s*/i, /^Response:?\\s*/i, /^Output:?\\s*/i, /^Result:?\\s*/i];\n  for (const pattern of prefixPatterns) {\n    if (pattern.test(cleaned)) {\n      const withoutPrefix = cleaned.replace(pattern, '').trim();\n      try { return JSON.parse(withoutPrefix); } catch (e) {\n        const withoutFences = withoutPrefix.replace(/^```(?:json)?[^\\n]*\\n?/, '').replace(/\\n?```\\s*$/, '').trim();\n        try { return JSON.parse(withoutFences); } catch (e2) {}\n      }\n    }\n  }\n  \n  // Try 6: Extract JSON from surrounding text (most permissive - find first { or [ to last } or ])\n  const jsonStartBrace = cleaned.indexOf('{');\n  const jsonStartBracket = cleaned.indexOf('[');\n  const jsonStart = jsonStartBrace !== -1 && jsonStartBracket !== -1 ? Math.min(jsonStartBrace, jsonStartBracket) : Math.max(jsonStartBrace, jsonStartBracket);\n  const jsonEndBrace = cleaned.lastIndexOf('}');\n  const jsonEndBracket = cleaned.lastIndexOf(']');\n  const jsonEnd = jsonEndBrace !== -1 && jsonEndBracket !== -1 ? Math.max(jsonEndBrace, jsonEndBracket) : Math.max(jsonEndBrace, jsonEndBracket);\n  \n  if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {\n    const extracted = cleaned.substring(jsonStart, jsonEnd + 1);\n    try { return JSON.parse(extracted); } catch (e) {\n      // Try fixing common JSON issues\n      const fixed = extracted.replace(/,\\s*}/g, '}').replace(/,\\s*]/g, ']').replace(/([{,]\\s*)(\\w+)(\\s*:)/g, '$1\"$2\"$3');\n      try { return JSON.parse(fixed); } catch (e2) {}\n    }\n  }\n  \n  return null;\n}\n\n// Check HTTP Status\nif (httpResponse.statusCode && httpResponse.statusCode >= 400) {\n  throw new Error(`[${nodeName}] HTTP ${httpResponse.statusCode}: ${httpResponse.body?.error || 'No details'}`);\n}\n\n// Extract agent_response\nlet agentResponse = httpResponse.body?.agent_response || httpResponse.agent_response || httpResponse.body?.response || httpResponse.response;\nif (!agentResponse && typeof httpResponse.body === 'string') agentResponse = httpResponse.body;\n\nif (!agentResponse) {\n  if (httpResponse.body?.error) throw new Error(`[${nodeName}] API error: ${httpResponse.body.error}`);\n  throw new Error(`[${nodeName}] No agent_response in HTTP response. Keys: ${Object.keys(httpResponse.body || {}).join(', ')}`);\n}\n\n// Parse JSON\nconst parsedJson = parseJsonRobust(agentResponse);\nif (!parsedJson) {\n  // Include raw LLM response in error for debugging\n  throw new Error(`[${nodeName}] JSON parse failed. Raw response: ${String(agentResponse).substring(0, 500)}`);\n}\n\n// Return wrapped in llm_response key (no validation, no merging)\nreturn [{ json: { llm_response: parsedJson } }];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -352,
+          144
+        ],
+        "id": "07f063ee-5ea1-4300-980c-53f40a7172c5",
+        "name": "Parse JSON Response",
+        "notes": "Generic parser - returns { llm_response: parsedJson }"
+      }
+    ],
+    "connections": {
+      "Start": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HTTP Request": {
+        "main": [
+          [
+            {
+              "node": "Parse JSON Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Niket Puranik",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-02-19T14:47:40.963Z",
+        "id": 3376,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "deactivated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-19T14:47:40.975Z",
+        "id": 3377,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-19T15:46:46.909Z",
+        "id": 3397,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "deactivated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-19T15:46:46.927Z",
+        "id": 3398,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-19T16:21:37.298Z",
+        "id": 3413,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "deactivated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-19T16:21:37.318Z",
+        "id": 3414,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-20T07:54:20.133Z",
+        "id": 3440,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "deactivated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-20T07:54:20.149Z",
+        "id": 3441,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-20T10:05:45.810Z",
+        "id": 3466,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "deactivated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-20T10:05:45.832Z",
+        "id": 3467,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-20T12:02:30.433Z",
+        "id": 3631,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "deactivated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-19T13:59:37.348Z",
+        "id": 3340,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "deactivated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-19T13:59:37.361Z",
+        "id": 3341,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-19T14:03:22.753Z",
+        "id": 3347,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "deactivated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-19T14:03:22.768Z",
+        "id": 3348,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-19T14:13:16.664Z",
+        "id": 3349,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "deactivated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-19T14:13:16.678Z",
+        "id": 3350,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-20T08:46:41.399Z",
+        "id": 3458,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "deactivated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-20T08:46:41.416Z",
+        "id": 3459,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-20T12:02:30.455Z",
+        "id": 3632,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-20T12:13:22.008Z",
+        "id": 3664,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "deactivated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-20T12:13:22.038Z",
+        "id": 3665,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-20T13:15:40.095Z",
+        "id": 3763,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "deactivated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-19T15:30:59.641Z",
+        "id": 3385,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "deactivated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-19T15:30:59.657Z",
+        "id": 3386,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-19T14:26:36.638Z",
+        "id": 3360,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "deactivated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-19T14:26:36.649Z",
+        "id": 3361,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-20T13:15:40.118Z",
+        "id": 3764,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-20T13:17:41.367Z",
+        "id": 3769,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "deactivated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-20T13:17:41.383Z",
+        "id": 3770,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-20T15:52:34.068Z",
+        "id": 3829,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "deactivated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-20T15:52:34.099Z",
+        "id": 3830,
+        "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+        "versionId": "bacd8a96-f5a3-41b5-a2bf-528902f1ca47",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      }
+    ]
+  }
+}

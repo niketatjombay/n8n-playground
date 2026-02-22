@@ -1,0 +1,1972 @@
+{
+  "updatedAt": "2026-01-29T04:16:29.109Z",
+  "createdAt": "2026-01-21T05:39:58.701Z",
+  "id": "TTbbxmXsrx2fT1tm",
+  "name": "[DEV] Document Summary Extractor",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "7f30cb94-cc2f-4351-8e09-43c713cd55e5",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -3024,
+        -1168
+      ],
+      "id": "e70adb87-19b4-427e-9593-df3e0ac4b455",
+      "name": "Webhook",
+      "webhookId": "7f30cb94-cc2f-4351-8e09-43c713cd55e5"
+    },
+    {
+      "parameters": {
+        "jsCode": "let data = $input.first().json.data;\nlet body = $input.first().json.body;\n\n//let prompt = JSON.stringify(\"Summarize the meeting notes. Respond with JSON format { summary: 'ai summary' }: \" + JSON.stringify(data));\n\nreturn [{\n  data: data,\n  file_type: body.file_type,\n  client_id: body.client_id,\n  project_id: body.project_id,\n  meeting_note_id: body.meeting_note_id\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1456,
+        -944
+      ],
+      "id": "8d9173ac-df91-42f5-9473-14a27239db26",
+      "name": "Meeting Notes Prompt Generator"
+    },
+    {
+      "parameters": {
+        "jsCode": "let body = $input.first().json.body;\nlet data = $input.first().json.data;\nlet prompt = \"Summarize the document... raw content: \" + data;\n\nreturn [{\n  json: {\n    prompt: prompt,\n    model: \"global.anthropic.claude-haiku-4-5-20251001-v1:0\",\n    node_name: \"DSE_ProjectDoc\",\n    workflow_id: \"document-summary-extractor\",\n    workflow_session_id: \"dse_\" + body.project_id + \"_\" + Date.now(),\n    memory_id: \"memory_gp8vo-N6dx8qAYMs\",\n    client_id: \"client_\" + body.client_id,\n    project_id: \"project_\" + body.project_id\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1456,
+        -304
+      ],
+      "id": "772c0e78-20ad-4a65-8e53-6b6ea592a114",
+      "name": "Project Document Prompt Generator"
+    },
+    {
+      "parameters": {
+        "jsCode": "let body = $input.first().json.body;\nlet prompt = \"Project Info Updated: \" + JSON.stringify(body.data);\nreturn [{\n  json: {\n    prompt: prompt,\n    model: \"global.anthropic.claude-haiku-4-5-20251001-v1:0\",\n    node_name: \"DSE_ProjectInfo\",\n    workflow_id: \"document-summary-extractor\",\n    workflow_session_id: \"dse_\" + body.project_id + \"_\" + Date.now(),\n    memory_id: \"memory_gp8vo-N6dx8qAYMs\",\n    client_id: \"client_\" + body.client_id,\n    project_id: \"project_\" + body.project_id\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2576,
+        -1376
+      ],
+      "id": "a78f5cc6-3549-42a7-8961-662d03e72c22",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://coreapi.ur-nl.com/meeting_notes/{{ $json.meeting_note_id}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={   \"meeting_note\": {  \"status\": \"extraction_failed\", \"error_message\": \"{{ $json.error_message }}\"   } } ",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Subdomain",
+              "value": "dashboard"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -112,
+        -1040
+      ],
+      "id": "82533d02-8942-4886-a8f0-2263721794e1",
+      "name": "HTTP Request3",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "9fZP8bOKRNJtilO1",
+          "name": "Jombay Staging API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://coreapi.ur-nl.com/project_documents/{{ $json.body.project_document_id }}/update_summary",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "{   \"project_document\": {     \"status\": \"processed\"   } }",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Subdomain",
+              "value": "dashboard"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -1008,
+        -304
+      ],
+      "id": "3c1f2b22-3ec7-4474-9419-db0a5df2d3aa",
+      "name": "HTTP Request4",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "9fZP8bOKRNJtilO1",
+          "name": "Jombay Staging API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://coreapi.ur-nl.com/projects/{{ $('Webhook').first().json.body.project_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "{   \"project\": {     \"memory_status\": \"updated\"   } }",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Subdomain",
+              "value": "dashboard"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -2128,
+        -1376
+      ],
+      "id": "322b0055-1a71-43ba-ac5a-09286d70d9ef",
+      "name": "HTTP Request5",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "9fZP8bOKRNJtilO1",
+          "name": "Jombay Staging API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Handle LLM sub-workflow error\nconst errorMsg = $input.first().json.error?.message || $input.first().json.message || 'LLM processing failed';\nreturn [{\n  json: {\n    error_message: errorMsg,\n    meeting_note_id: $('Meeting Notes Prompt Generator1').first().json.meeting_note_id\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -336,
+        -1040
+      ],
+      "id": "a10476ac-b45b-4fec-8684-b2e443ec1b71",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.file_type }}",
+                    "rightValue": "project_info",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "052bfad1-00b2-4f40-af06-ebc9531501b6"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Project Info"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "7926a14c-6b1d-4f8b-8201-eef8d67a1d20",
+                    "leftValue": "={{ $json.body.file_type }}",
+                    "rightValue": "meeting_notes",
+                    "operator": {
+                      "type": "string",
+                      "operation": "regex"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Meeting Note"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "fe9ea21d-b9d1-4430-8e22-368960e6d9bf",
+                    "leftValue": "={{ $json.body.file_type }}",
+                    "rightValue": "project_document",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Project Document"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -2800,
+        -1184
+      ],
+      "id": "8917b075-2621-43f4-a158-f0248fa25d22",
+      "name": "Check for File Type"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "46934f17-6025-4f35-95e5-82c5f266776e",
+              "leftValue": "={{ $json.body.google_drive_url }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -2576,
+        -1168
+      ],
+      "id": "bce5b7b2-0e0d-4e8c-972d-3509cb91c599",
+      "name": "Meeting Notes with / without document"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.file_type }}",
+                    "rightValue": "meeting_notes",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "c839f255-1132-495e-8fb4-2636d9044d76"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "meeting_notes"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "700e8522-1f9b-4477-b4bb-6365b2696ed7",
+                    "leftValue": "={{ $json.body.file_type }}",
+                    "rightValue": "project_document",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "project_document"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -1680,
+        -352
+      ],
+      "id": "b8e16203-42bc-4fde-81a1-4307c2552a33",
+      "name": "Check if file type is meeting notes / project document"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "QPZLJWuTDMYHs1dL",
+          "mode": "list",
+          "cachedResultName": "nexus_workflow_prompt_templates",
+          "cachedResultUrl": "/projects/JIV2elLHsVFXybZ2/datatables/QPZLJWuTDMYHs1dL"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "identifier",
+              "keyValue": "document_summary_extractor"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -1232,
+        -944
+      ],
+      "id": "4a6b34b7-0f08-43e6-98dd-ac01675620f3",
+      "name": "Get row(s)"
+    },
+    {
+      "parameters": {
+        "jsCode": "let body = $('Meeting Notes Prompt Generator').first().json;\nlet promptTemplate = $input.first().json.prompt;\nlet prompt = promptTemplate.replace(\"$raw_file_content\", JSON.stringify(body.data));\n\nreturn [{\n  json: {\n    prompt: prompt,\n    model: \"global.anthropic.claude-haiku-4-5-20251001-v1:0\",\n    node_name: \"DSE_MeetingNotes\",\n    workflow_id: \"document-summary-extractor\",\n    workflow_session_id: \"dse_\" + body.project_id + \"_\" + Date.now(),\n    client_id: \"client_\" + body.client_id,\n    project_id: \"project_\" + body.project_id,\n    meeting_note_id: body.meeting_note_id\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1008,
+        -944
+      ],
+      "id": "059b843f-0845-450c-ab62-35322b196434",
+      "name": "Meeting Notes Prompt Generator1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse LLM sub-workflow response (already parsed JSON)\nconst llmResponse = $input.first().json.llm_response;\n\nreturn [{\n  json: {\n    document_summary: llmResponse.document_summary,\n    ai_observations: llmResponse.ai_observations,\n    meeting_note_id: $('Meeting Notes Prompt Generator1').first().json.meeting_note_id\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -336,
+        -848
+      ],
+      "id": "0688d4f1-00c4-4964-81ef-255c60a01d84",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://coreapi.ur-nl.com/meeting_notes/{{ $('Meeting Notes Prompt Generator').item.json.meeting_note_id}}/update_summary",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={\"meeting_note\": { \"ai_summary\": {{ JSON.stringify($json.document_summary) }}, \"ai_observations\": {{ JSON.stringify($json.ai_observations || {}) }},\"status\": \"updating_project_memory\"}}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Subdomain",
+              "value": "dashboard"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -112,
+        -848
+      ],
+      "id": "b891f9d5-84e4-4dcc-a6a0-6c1506db8267",
+      "name": "HTTP Request6",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "9fZP8bOKRNJtilO1",
+          "name": "Jombay Staging API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://coreapi.ur-nl.com/meeting_notes/{{ $json.meeting_note_id}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={   \"meeting_note\": {  \"status\": \"extraction_failed\", \"error_message\": \"{{ $json.error_message }}\"   } } ",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Subdomain",
+              "value": "dashboard"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -2128,
+        -1072
+      ],
+      "id": "07f2fdd3-1206-456a-8b46-2b31f46be4cc",
+      "name": "HTTP Request7",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "9fZP8bOKRNJtilO1",
+          "name": "Jombay Staging API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format input for drive-utils sub-workflow\nconst body = $('Webhook').first().json.body;\nreturn [{\n  json: {\n    mode: \"EXTRACT_CONTENT\",\n    google_drive_file_url: body.google_drive_url\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2352,
+        -784
+      ],
+      "id": "894e3ff2-41e5-4dc5-9f74-8451c7244202",
+      "name": "FMT_DriveInput"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1qoBroTFrN02UbZvJOBIJ"
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        -2128,
+        -784
+      ],
+      "id": "0b3616cb-eb94-4ce8-858b-9574b12fe98c",
+      "name": "SUB_DriveUtils",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Bridge drive-utils output to downstream nodes\n// On success: merge webhook body with extracted text\n// On error: flag extraction_error\ntry {\n  const result = $input.first().json;\n  // Check for sub-workflow error indicators\n  if (result.error || result.validation_errors?.length > 0 || result.status === 'error') {\n    return [{ json: { extraction_error: true, error_message: result.error || result.validation_errors?.[0]?.message || 'Drive extraction failed' } }];\n  }\n  const body = $('Webhook').first().json.body;\n  const extractedText = result.extracted_text || result.data?.extracted_text || '';\n  if (!extractedText) {\n    return [{ json: { extraction_error: true, error_message: 'No text extracted from document' } }];\n  }\n  return [{ json: { body: body, data: extractedText } }];\n} catch (e) {\n  return [{ json: { extraction_error: true, error_message: 'Drive extraction error: ' + e.message } }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1904,
+        -784
+      ],
+      "id": "9a294305-ba9d-4fb6-a6b8-554da6f6bbc8",
+      "name": "FMT_DriveOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "4c5bbf8f-10b3-48ee-9d1e-8762028bb703",
+              "leftValue": "={{ $json.extraction_error }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1680,
+        -784
+      ],
+      "id": "c5553e70-fdbb-4340-8364-76d9fe8ce3a3",
+      "name": "IF_ExtractOk"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format error for coreapi — report extraction failure\nconst body = $('Webhook').first().json.body;\nreturn [{\n  json: {\n    meeting_note_id: body.meeting_note_id,\n    error_message: $json.error_message || 'Could not extract content from Google Drive document'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1456,
+        -1072
+      ],
+      "id": "a161bf3f-60f1-4ff2-a399-02ee76164629",
+      "name": "ERR_ExtractFailed"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1DR7SBmbHnVajdbxTl5Vu"
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        -2352,
+        -1376
+      ],
+      "id": "b712d528-bce4-41cc-b060-9b07cfd94e2c",
+      "name": "SUB_LLM_ProjectInfo",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1DR7SBmbHnVajdbxTl5Vu"
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        -784,
+        -944
+      ],
+      "id": "359ab108-6149-4de9-a70b-00697302af2a",
+      "name": "SUB_LLM_MeetingNotes",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1DR7SBmbHnVajdbxTl5Vu"
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        -1232,
+        -304
+      ],
+      "id": "21757a3e-5605-46fc-b05f-4b7a340585a4",
+      "name": "SUB_LLM_ProjectDoc",
+      "onError": "continueErrorOutput"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Check for File Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Meeting Notes Prompt Generator": {
+      "main": [
+        [
+          {
+            "node": "Get row(s)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "SUB_LLM_ProjectInfo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Project Document Prompt Generator": {
+      "main": [
+        [
+          {
+            "node": "SUB_LLM_ProjectDoc",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check for File Type": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Meeting Notes with / without document",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "FMT_DriveInput",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Meeting Notes with / without document": {
+      "main": [
+        [
+          {
+            "node": "FMT_DriveInput",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Meeting Notes Prompt Generator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if file type is meeting notes / project document": {
+      "main": [
+        [
+          {
+            "node": "Meeting Notes Prompt Generator",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Project Document Prompt Generator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s)": {
+      "main": [
+        [
+          {
+            "node": "Meeting Notes Prompt Generator1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Meeting Notes Prompt Generator1": {
+      "main": [
+        [
+          {
+            "node": "SUB_LLM_MeetingNotes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FMT_DriveInput": {
+      "main": [
+        [
+          {
+            "node": "SUB_DriveUtils",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SUB_DriveUtils": {
+      "main": [
+        [
+          {
+            "node": "FMT_DriveOutput",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "FMT_DriveOutput",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FMT_DriveOutput": {
+      "main": [
+        [
+          {
+            "node": "IF_ExtractOk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF_ExtractOk": {
+      "main": [
+        [
+          {
+            "node": "ERR_ExtractFailed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check if file type is meeting notes / project document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ERR_ExtractFailed": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SUB_LLM_ProjectInfo": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request5",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SUB_LLM_MeetingNotes": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SUB_LLM_ProjectDoc": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request4",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "timezone": "Asia/Kolkata",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "workflows.ur-nl.com",
+            "connection": "keep-alive",
+            "x-forwarded-for": "103.197.74.203, 10.0.1.65",
+            "x-forwarded-proto": "https",
+            "x-forwarded-host": "workflows.ur-nl.com",
+            "x-forwarded-port": "443",
+            "x-forwarded-path": "/webhook/7f30cb94-cc2f-4351-8e09-43c713cd55e5",
+            "x-real-ip": "103.197.74.203",
+            "x-kong-request-id": "84775119c6d06e3bb167594e1c3b5967",
+            "content-length": "932",
+            "x-amzn-trace-id": "Root=1-69798b77-2db8f481506af3c60e0fae16",
+            "accept-encoding": "gzip;q=1.0,deflate;q=0.6,identity;q=0.3",
+            "accept": "*/*",
+            "user-agent": "Ruby",
+            "apikey": "",
+            "content-type": "multipart/form-data; boundary=dzh7sXE8EfNrVizyZFfx4BqgQvWghF6jDKX-RasFtb6E9ZVut_czZA"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "prompt": "Custom Instructions",
+            "file_type": "meeting_notes",
+            "client_id": "696f20fc74fc389d733b8585",
+            "project_id": "697989977cd46904832638ed",
+            "meeting_note_id": "697989f47cd46904832638f1",
+            "google_drive_url": "https://drive.google.com/file/d/1Xv3zdh5_eAmjV_T_IyT7baSVzKJsYRqp/view?usp=drive_link"
+          },
+          "webhookUrl": "https://workflows.ur-nl.com/webhook/7f30cb94-cc2f-4351-8e09-43c713cd55e5",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "versionId": "fd3fa596-bffd-4273-95f3-9532289a600e",
+  "activeVersionId": "fd3fa596-bffd-4273-95f3-9532289a600e",
+  "versionCounter": 421,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-01-21T05:39:58.701Z",
+      "createdAt": "2026-01-21T05:39:58.701Z",
+      "role": "workflow:owner",
+      "workflowId": "TTbbxmXsrx2fT1tm",
+      "projectId": "JIV2elLHsVFXybZ2",
+      "project": {
+        "updatedAt": "2025-12-05T03:44:52.986Z",
+        "createdAt": "2025-12-05T02:56:21.571Z",
+        "id": "JIV2elLHsVFXybZ2",
+        "name": "Niket Puranik <niket@jombay.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "8083cc02-c696-4bbe-91a2-08d8a36f6735",
+        "projectRelations": [
+          {
+            "updatedAt": "2025-12-05T02:56:21.571Z",
+            "createdAt": "2025-12-05T02:56:21.571Z",
+            "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735",
+            "projectId": "JIV2elLHsVFXybZ2",
+            "user": {
+              "updatedAt": "2026-02-08T06:49:36.399Z",
+              "createdAt": "2025-12-05T02:55:59.706Z",
+              "id": "8083cc02-c696-4bbe-91a2-08d8a36f6735",
+              "email": "niket@jombay.com",
+              "firstName": "Niket",
+              "lastName": "Puranik",
+              "personalizationAnswers": {
+                "version": "v4",
+                "personalization_survey_submitted_at": "2025-12-05T03:46:42.524Z",
+                "personalization_survey_n8n_version": "1.122.5",
+                "companySize": "<20",
+                "companyType": "saas",
+                "role": "business-owner",
+                "reportedSource": "google"
+              },
+              "settings": {
+                "userActivated": true,
+                "easyAIWorkflowOnboarded": true,
+                "firstSuccessfulWorkflowId": "wjR2j2YRVwBR3XNq",
+                "userActivatedAt": 1764936522539,
+                "npsSurvey": {
+                  "responded": true,
+                  "lastShownAt": 1768980421286
+                }
+              },
+              "disabled": false,
+              "mfaEnabled": false,
+              "lastActiveAt": "2026-02-08",
+              "isPending": false
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-01-29T04:16:31.464Z",
+    "createdAt": "2026-01-29T04:16:29.110Z",
+    "versionId": "fd3fa596-bffd-4273-95f3-9532289a600e",
+    "workflowId": "TTbbxmXsrx2fT1tm",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "7f30cb94-cc2f-4351-8e09-43c713cd55e5",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          -3024,
+          -1168
+        ],
+        "id": "e70adb87-19b4-427e-9593-df3e0ac4b455",
+        "name": "Webhook",
+        "webhookId": "7f30cb94-cc2f-4351-8e09-43c713cd55e5"
+      },
+      {
+        "parameters": {
+          "jsCode": "let data = $input.first().json.data;\nlet body = $input.first().json.body;\n\n//let prompt = JSON.stringify(\"Summarize the meeting notes. Respond with JSON format { summary: 'ai summary' }: \" + JSON.stringify(data));\n\nreturn [{\n  data: data,\n  file_type: body.file_type,\n  client_id: body.client_id,\n  project_id: body.project_id,\n  meeting_note_id: body.meeting_note_id\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -1456,
+          -944
+        ],
+        "id": "8d9173ac-df91-42f5-9473-14a27239db26",
+        "name": "Meeting Notes Prompt Generator"
+      },
+      {
+        "parameters": {
+          "jsCode": "let body = $input.first().json.body;\nlet data = $input.first().json.data;\nlet prompt = \"Summarize the document... raw content: \" + data;\n\nreturn [{\n  json: {\n    prompt: prompt,\n    model: \"global.anthropic.claude-haiku-4-5-20251001-v1:0\",\n    node_name: \"DSE_ProjectDoc\",\n    workflow_id: \"document-summary-extractor\",\n    workflow_session_id: \"dse_\" + body.project_id + \"_\" + Date.now(),\n    memory_id: \"memory_gp8vo-N6dx8qAYMs\",\n    client_id: \"client_\" + body.client_id,\n    project_id: \"project_\" + body.project_id\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -1456,
+          -304
+        ],
+        "id": "772c0e78-20ad-4a65-8e53-6b6ea592a114",
+        "name": "Project Document Prompt Generator"
+      },
+      {
+        "parameters": {
+          "jsCode": "let body = $input.first().json.body;\nlet prompt = \"Project Info Updated: \" + JSON.stringify(body.data);\nreturn [{\n  json: {\n    prompt: prompt,\n    model: \"global.anthropic.claude-haiku-4-5-20251001-v1:0\",\n    node_name: \"DSE_ProjectInfo\",\n    workflow_id: \"document-summary-extractor\",\n    workflow_session_id: \"dse_\" + body.project_id + \"_\" + Date.now(),\n    memory_id: \"memory_gp8vo-N6dx8qAYMs\",\n    client_id: \"client_\" + body.client_id,\n    project_id: \"project_\" + body.project_id\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -2576,
+          -1376
+        ],
+        "id": "a78f5cc6-3549-42a7-8961-662d03e72c22",
+        "name": "Code in JavaScript"
+      },
+      {
+        "parameters": {
+          "method": "PUT",
+          "url": "=https://coreapi.ur-nl.com/meeting_notes/{{ $json.meeting_note_id}}",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendBody": true,
+          "contentType": "raw",
+          "rawContentType": "application/json",
+          "body": "={   \"meeting_note\": {  \"status\": \"extraction_failed\", \"error_message\": \"{{ $json.error_message }}\"   } } ",
+          "options": {},
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-Subdomain",
+                "value": "dashboard"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.3,
+        "position": [
+          -112,
+          -1040
+        ],
+        "id": "82533d02-8942-4886-a8f0-2263721794e1",
+        "name": "HTTP Request3",
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "9fZP8bOKRNJtilO1",
+            "name": "Jombay Staging API"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "method": "PUT",
+          "url": "=https://coreapi.ur-nl.com/project_documents/{{ $json.body.project_document_id }}/update_summary",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendBody": true,
+          "contentType": "raw",
+          "rawContentType": "application/json",
+          "body": "{   \"project_document\": {     \"status\": \"processed\"   } }",
+          "options": {},
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-Subdomain",
+                "value": "dashboard"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.3,
+        "position": [
+          -1008,
+          -304
+        ],
+        "id": "3c1f2b22-3ec7-4474-9419-db0a5df2d3aa",
+        "name": "HTTP Request4",
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "9fZP8bOKRNJtilO1",
+            "name": "Jombay Staging API"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "method": "PUT",
+          "url": "=https://coreapi.ur-nl.com/projects/{{ $('Webhook').first().json.body.project_id }}",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendBody": true,
+          "contentType": "raw",
+          "rawContentType": "application/json",
+          "body": "{   \"project\": {     \"memory_status\": \"updated\"   } }",
+          "options": {},
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-Subdomain",
+                "value": "dashboard"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.3,
+        "position": [
+          -2128,
+          -1376
+        ],
+        "id": "322b0055-1a71-43ba-ac5a-09286d70d9ef",
+        "name": "HTTP Request5",
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "9fZP8bOKRNJtilO1",
+            "name": "Jombay Staging API"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// Handle LLM sub-workflow error\nconst errorMsg = $input.first().json.error?.message || $input.first().json.message || 'LLM processing failed';\nreturn [{\n  json: {\n    error_message: errorMsg,\n    meeting_note_id: $('Meeting Notes Prompt Generator1').first().json.meeting_note_id\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -336,
+          -1040
+        ],
+        "id": "a10476ac-b45b-4fec-8684-b2e443ec1b71",
+        "name": "Code in JavaScript1"
+      },
+      {
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 3
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.body.file_type }}",
+                      "rightValue": "project_info",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      },
+                      "id": "052bfad1-00b2-4f40-af06-ebc9531501b6"
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "Project Info"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 3
+                  },
+                  "conditions": [
+                    {
+                      "id": "7926a14c-6b1d-4f8b-8201-eef8d67a1d20",
+                      "leftValue": "={{ $json.body.file_type }}",
+                      "rightValue": "meeting_notes",
+                      "operator": {
+                        "type": "string",
+                        "operation": "regex"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "Meeting Note"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 3
+                  },
+                  "conditions": [
+                    {
+                      "id": "fe9ea21d-b9d1-4430-8e22-368960e6d9bf",
+                      "leftValue": "={{ $json.body.file_type }}",
+                      "rightValue": "project_document",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals",
+                        "name": "filter.operator.equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "Project Document"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3.4,
+        "position": [
+          -2800,
+          -1184
+        ],
+        "id": "8917b075-2621-43f4-a158-f0248fa25d22",
+        "name": "Check for File Type"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "46934f17-6025-4f35-95e5-82c5f266776e",
+                "leftValue": "={{ $json.body.google_drive_url }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "exists",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          -2576,
+          -1168
+        ],
+        "id": "bce5b7b2-0e0d-4e8c-972d-3509cb91c599",
+        "name": "Meeting Notes with / without document"
+      },
+      {
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 3
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.body.file_type }}",
+                      "rightValue": "meeting_notes",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      },
+                      "id": "c839f255-1132-495e-8fb4-2636d9044d76"
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "meeting_notes"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 3
+                  },
+                  "conditions": [
+                    {
+                      "id": "700e8522-1f9b-4477-b4bb-6365b2696ed7",
+                      "leftValue": "={{ $json.body.file_type }}",
+                      "rightValue": "project_document",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals",
+                        "name": "filter.operator.equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "project_document"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3.4,
+        "position": [
+          -1680,
+          -352
+        ],
+        "id": "b8e16203-42bc-4fde-81a1-4307c2552a33",
+        "name": "Check if file type is meeting notes / project document"
+      },
+      {
+        "parameters": {
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "value": "QPZLJWuTDMYHs1dL",
+            "mode": "list",
+            "cachedResultName": "nexus_workflow_prompt_templates",
+            "cachedResultUrl": "/projects/JIV2elLHsVFXybZ2/datatables/QPZLJWuTDMYHs1dL"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "identifier",
+                "keyValue": "document_summary_extractor"
+              }
+            ]
+          },
+          "returnAll": true
+        },
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          -1232,
+          -944
+        ],
+        "id": "4a6b34b7-0f08-43e6-98dd-ac01675620f3",
+        "name": "Get row(s)"
+      },
+      {
+        "parameters": {
+          "jsCode": "let body = $('Meeting Notes Prompt Generator').first().json;\nlet promptTemplate = $input.first().json.prompt;\nlet prompt = promptTemplate.replace(\"$raw_file_content\", JSON.stringify(body.data));\n\nreturn [{\n  json: {\n    prompt: prompt,\n    model: \"global.anthropic.claude-haiku-4-5-20251001-v1:0\",\n    node_name: \"DSE_MeetingNotes\",\n    workflow_id: \"document-summary-extractor\",\n    workflow_session_id: \"dse_\" + body.project_id + \"_\" + Date.now(),\n    client_id: \"client_\" + body.client_id,\n    project_id: \"project_\" + body.project_id,\n    meeting_note_id: body.meeting_note_id\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -1008,
+          -944
+        ],
+        "id": "059b843f-0845-450c-ab62-35322b196434",
+        "name": "Meeting Notes Prompt Generator1"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Parse LLM sub-workflow response (already parsed JSON)\nconst llmResponse = $input.first().json.llm_response;\n\nreturn [{\n  json: {\n    document_summary: llmResponse.document_summary,\n    ai_observations: llmResponse.ai_observations,\n    meeting_note_id: $('Meeting Notes Prompt Generator1').first().json.meeting_note_id\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -336,
+          -848
+        ],
+        "id": "0688d4f1-00c4-4964-81ef-255c60a01d84",
+        "name": "Code in JavaScript2"
+      },
+      {
+        "parameters": {
+          "method": "PUT",
+          "url": "=https://coreapi.ur-nl.com/meeting_notes/{{ $('Meeting Notes Prompt Generator').item.json.meeting_note_id}}/update_summary",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendBody": true,
+          "contentType": "raw",
+          "rawContentType": "application/json",
+          "body": "={\"meeting_note\": { \"ai_summary\": {{ JSON.stringify($json.document_summary) }}, \"ai_observations\": {{ JSON.stringify($json.ai_observations || {}) }},\"status\": \"updating_project_memory\"}}",
+          "options": {},
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-Subdomain",
+                "value": "dashboard"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.3,
+        "position": [
+          -112,
+          -848
+        ],
+        "id": "b891f9d5-84e4-4dcc-a6a0-6c1506db8267",
+        "name": "HTTP Request6",
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "9fZP8bOKRNJtilO1",
+            "name": "Jombay Staging API"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "method": "PUT",
+          "url": "=https://coreapi.ur-nl.com/meeting_notes/{{ $json.meeting_note_id}}",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendBody": true,
+          "contentType": "raw",
+          "rawContentType": "application/json",
+          "body": "={   \"meeting_note\": {  \"status\": \"extraction_failed\", \"error_message\": \"{{ $json.error_message }}\"   } } ",
+          "options": {},
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-Subdomain",
+                "value": "dashboard"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.3,
+        "position": [
+          -2128,
+          -1072
+        ],
+        "id": "07f2fdd3-1206-456a-8b46-2b31f46be4cc",
+        "name": "HTTP Request7",
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "9fZP8bOKRNJtilO1",
+            "name": "Jombay Staging API"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// Format input for drive-utils sub-workflow\nconst body = $('Webhook').first().json.body;\nreturn [{\n  json: {\n    mode: \"EXTRACT_CONTENT\",\n    google_drive_file_url: body.google_drive_url\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -2352,
+          -784
+        ],
+        "id": "894e3ff2-41e5-4dc5-9f74-8451c7244202",
+        "name": "FMT_DriveInput"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "1qoBroTFrN02UbZvJOBIJ"
+          }
+        },
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.1,
+        "position": [
+          -2128,
+          -784
+        ],
+        "id": "0b3616cb-eb94-4ce8-858b-9574b12fe98c",
+        "name": "SUB_DriveUtils",
+        "onError": "continueErrorOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Bridge drive-utils output to downstream nodes\n// On success: merge webhook body with extracted text\n// On error: flag extraction_error\ntry {\n  const result = $input.first().json;\n  // Check for sub-workflow error indicators\n  if (result.error || result.validation_errors?.length > 0 || result.status === 'error') {\n    return [{ json: { extraction_error: true, error_message: result.error || result.validation_errors?.[0]?.message || 'Drive extraction failed' } }];\n  }\n  const body = $('Webhook').first().json.body;\n  const extractedText = result.extracted_text || result.data?.extracted_text || '';\n  if (!extractedText) {\n    return [{ json: { extraction_error: true, error_message: 'No text extracted from document' } }];\n  }\n  return [{ json: { body: body, data: extractedText } }];\n} catch (e) {\n  return [{ json: { extraction_error: true, error_message: 'Drive extraction error: ' + e.message } }];\n}"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -1904,
+          -784
+        ],
+        "id": "9a294305-ba9d-4fb6-a6b8-554da6f6bbc8",
+        "name": "FMT_DriveOutput"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "4c5bbf8f-10b3-48ee-9d1e-8762028bb703",
+                "leftValue": "={{ $json.extraction_error }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          -1680,
+          -784
+        ],
+        "id": "c5553e70-fdbb-4340-8364-76d9fe8ce3a3",
+        "name": "IF_ExtractOk"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Format error for coreapi — report extraction failure\nconst body = $('Webhook').first().json.body;\nreturn [{\n  json: {\n    meeting_note_id: body.meeting_note_id,\n    error_message: $json.error_message || 'Could not extract content from Google Drive document'\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -1456,
+          -1072
+        ],
+        "id": "a161bf3f-60f1-4ff2-a399-02ee76164629",
+        "name": "ERR_ExtractFailed"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "1DR7SBmbHnVajdbxTl5Vu"
+          }
+        },
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.1,
+        "position": [
+          -2352,
+          -1376
+        ],
+        "id": "b712d528-bce4-41cc-b060-9b07cfd94e2c",
+        "name": "SUB_LLM_ProjectInfo",
+        "onError": "continueErrorOutput"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "1DR7SBmbHnVajdbxTl5Vu"
+          }
+        },
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.1,
+        "position": [
+          -784,
+          -944
+        ],
+        "id": "359ab108-6149-4de9-a70b-00697302af2a",
+        "name": "SUB_LLM_MeetingNotes",
+        "onError": "continueErrorOutput"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "1DR7SBmbHnVajdbxTl5Vu"
+          }
+        },
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.1,
+        "position": [
+          -1232,
+          -304
+        ],
+        "id": "21757a3e-5605-46fc-b05f-4b7a340585a4",
+        "name": "SUB_LLM_ProjectDoc",
+        "onError": "continueErrorOutput"
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Check for File Type",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Meeting Notes Prompt Generator": {
+        "main": [
+          [
+            {
+              "node": "Get row(s)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code in JavaScript": {
+        "main": [
+          [
+            {
+              "node": "SUB_LLM_ProjectInfo",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Project Document Prompt Generator": {
+        "main": [
+          [
+            {
+              "node": "SUB_LLM_ProjectDoc",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code in JavaScript1": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check for File Type": {
+        "main": [
+          [
+            {
+              "node": "Code in JavaScript",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Meeting Notes with / without document",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "FMT_DriveInput",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Meeting Notes with / without document": {
+        "main": [
+          [
+            {
+              "node": "FMT_DriveInput",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Meeting Notes Prompt Generator",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check if file type is meeting notes / project document": {
+        "main": [
+          [
+            {
+              "node": "Meeting Notes Prompt Generator",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Project Document Prompt Generator",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get row(s)": {
+        "main": [
+          [
+            {
+              "node": "Meeting Notes Prompt Generator1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Meeting Notes Prompt Generator1": {
+        "main": [
+          [
+            {
+              "node": "SUB_LLM_MeetingNotes",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code in JavaScript2": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request6",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "FMT_DriveInput": {
+        "main": [
+          [
+            {
+              "node": "SUB_DriveUtils",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "SUB_DriveUtils": {
+        "main": [
+          [
+            {
+              "node": "FMT_DriveOutput",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "FMT_DriveOutput",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "FMT_DriveOutput": {
+        "main": [
+          [
+            {
+              "node": "IF_ExtractOk",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "IF_ExtractOk": {
+        "main": [
+          [
+            {
+              "node": "ERR_ExtractFailed",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Check if file type is meeting notes / project document",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "ERR_ExtractFailed": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request7",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "SUB_LLM_ProjectInfo": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request5",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "HTTP Request5",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "SUB_LLM_MeetingNotes": {
+        "main": [
+          [
+            {
+              "node": "Code in JavaScript2",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Code in JavaScript1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "SUB_LLM_ProjectDoc": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request4",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "HTTP Request4",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Niket Puranik",
+    "name": "v1",
+    "description": "",
+    "autosaved": true,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-01-29T04:16:31.460Z",
+        "id": 796,
+        "workflowId": "TTbbxmXsrx2fT1tm",
+        "versionId": "fd3fa596-bffd-4273-95f3-9532289a600e",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      }
+    ]
+  }
+}

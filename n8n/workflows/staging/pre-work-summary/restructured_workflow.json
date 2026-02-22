@@ -1,0 +1,651 @@
+{
+  "name": "[STG] Pre-Work Summary",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "/staging/pre-work-summary",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1600,
+        0
+      ],
+      "id": "trg-webhook-001",
+      "name": "1.1_TRG_Webhook",
+      "webhookId": "pre-work-summary-stg-v1",
+      "notes": "Entry point: Receives pre-work summary generation requests via webhook. Returns 200 immediately (default onReceived mode)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "has-docs-001",
+              "leftValue": "={{ $json.body.documents_urls }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1376,
+        0
+      ],
+      "id": "if-has-docs-001",
+      "name": "2.1_IF_HasDocs",
+      "notes": "Check if documents_urls field exists and is non-empty"
+    },
+    {
+      "parameters": {
+        "jsCode": "const urls = $('1.1_TRG_Webhook').first().json.body.documents_urls.split(',').map(u => u.trim()).filter(u => u.length > 0);\nreturn urls.map(url => ({ json: { mode: 'EXTRACT_CONTENT', google_drive_file_url: url } }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1152,
+        -144
+      ],
+      "id": "js-split-urls-001",
+      "name": "2.2_JS_SplitUrls",
+      "notes": "Split comma-separated document URLs into individual items for drive-utils"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "8N4Pzq6oTI5ligt4r8ZJ4"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        -928,
+        -144
+      ],
+      "id": "sub-extract-doc-001",
+      "name": "2.3_SUB_ExtractDoc",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000,
+      "continueOnFail": true,
+      "notes": "Call drive-utils sub-workflow to extract text from each document URL"
+    },
+    {
+      "parameters": {
+        "jsCode": "const docs = [];\nfor (const item of $input.all()) {\n  if (item.json.extracted_text && item.json.status === 'success') {\n    docs.push(item.json.extracted_text);\n  }\n}\nreturn [{ json: { extracted_documents: docs, has_documents: docs.length > 0 } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -704,
+        -144
+      ],
+      "id": "js-collect-docs-001",
+      "name": "2.4_JS_CollectDocs",
+      "notes": "Aggregate all successfully extracted document texts into a single array"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "QPZLJWuTDMYHs1dL",
+          "mode": "list",
+          "cachedResultName": "nexus_workflow_prompt_templates",
+          "cachedResultUrl": "/projects/JIV2elLHsVFXybZ2/datatables/QPZLJWuTDMYHs1dL"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "identifier",
+              "keyValue": "prework_summary_deck_generator"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -480,
+        0
+      ],
+      "id": "dt-get-prompt-001",
+      "name": "3.1_DT_GetPrompt",
+      "executeOnce": true,
+      "notes": "Fetch prompt template from DataTable (single fetch for both docs/no-docs paths)"
+    },
+    {
+      "parameters": {
+        "jsCode": "const webhook = $('1.1_TRG_Webhook').first().json.body;\nlet prompt = $input.first().json.prompt;\n\n// Always add project details and project memory\nprompt += '\\n\\n# Project Details\\n<project_details>';\nprompt += webhook.project_details || '';\nprompt += '</project_details>\\n\\n';\n\nprompt += '\\n\\n# Project Summary\\n<project_summary>';\nprompt += webhook.current_project_memory || '';\nprompt += '</project_summary>\\n\\n';\n\n// Add documents if they were extracted\ntry {\n  const collectNode = $('2.4_JS_CollectDocs');\n  if (collectNode && collectNode.first()) {\n    const docs = collectNode.first().json.extracted_documents;\n    if (docs && docs.length > 0) {\n      prompt += '# Extra documents to refer\\n\\n<project_documents>';\n      docs.forEach(doc => {\n        prompt += '<document>' + doc + '</document>\\n\\n';\n      });\n      prompt += '</project_documents>\\n';\n    }\n  }\n} catch (e) {\n  // No documents path — skip\n}\n\nreturn [{\n  json: {\n    prompt: prompt,\n    client_id: webhook.client_id,\n    project_id: webhook.project_id,\n    workflow_session_id: webhook.workflow_session_id,\n    workflow_id: webhook.workflow_id,\n    workflow_name: webhook.workflow_name,\n    workflow_session_name: webhook.workflow_session_name,\n    client_name: webhook.client_name,\n    project_name: webhook.project_name,\n    google_drive_folder_id: webhook.google_drive_folder_id\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -256,
+        0
+      ],
+      "id": "fmt-build-prompt-001",
+      "name": "3.2_FMT_BuildPrompt",
+      "notes": "Assemble full prompt: template + project_details + project_memory + extracted documents (if any)"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "GDaWNcJJtLdY8Q6Y4Yv5p"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        -32,
+        0
+      ],
+      "id": "sub-call-llm-001",
+      "name": "4.1_SUB_CallLLM",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput",
+      "notes": "Call LLM sub-workflow with assembled prompt. Output 0 = success, Output 1 = error"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "llm-error-001",
+              "leftValue": "={{ $json.body_error }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        192,
+        0
+      ],
+      "id": "if-llm-error-001",
+      "name": "5.1_IF_LLMError",
+      "notes": "Check if LLM response contains body_error field (indicates API error)"
+    },
+    {
+      "parameters": {
+        "jsCode": "function jsonToSlideDocText(data) {\n  if (!data || typeof data !== \"object\") throw new Error(\"Expected an object as input.\");\n\n  const metadata = data.metadata || {};\n  const slidesObj = data.slides || {};\n\n  const lines = [];\n\n  // ---------- Helpers ----------\n  const titleCaseFromKey = (key) =>\n    String(key)\n      .replace(/_/g, \" \")\n      .replace(/\\s+/g, \" \")\n      .trim()\n      .replace(/\\b\\w/g, (c) => c.toUpperCase());\n\n  const isNonEmptyString = (v) => typeof v === \"string\" && v.trim().length > 0;\n  const isNonEmptyArray = (v) => Array.isArray(v) && v.length > 0;\n\n  const parseSlideId = (id) => {\n    const raw = String(id ?? \"\").trim();\n    if (!raw) return { major: Number.MAX_SAFE_INTEGER, minor: Number.MAX_SAFE_INTEGER, raw: \"\" };\n\n    const parts = raw.split(\".\").map((p) => p.trim());\n    const major = Number(parts[0]);\n    const minor = parts.length > 1 ? Number(parts[1]) : 0;\n\n    return {\n      major: Number.isFinite(major) ? major : Number.MAX_SAFE_INTEGER,\n      minor: Number.isFinite(minor) ? minor : Number.MAX_SAFE_INTEGER,\n      raw,\n    };\n  };\n\n  const compareSlide = (a, b) => {\n    const pa = parseSlideId(a.slide_id);\n    const pb = parseSlideId(b.slide_id);\n    if (pa.major !== pb.major) return pa.major - pb.major;\n    if (pa.minor !== pb.minor) return pa.minor - pb.minor;\n    return String(pa.raw).localeCompare(String(pb.raw));\n  };\n\n  const hr = () => lines.push(\"──────────────────────────────────────────────\");\n\n  const h0 = (t) => {\n    lines.push(String(t));\n    lines.push(\"=\".repeat(Math.max(8, String(t).length)));\n  };\n\n  const h1 = (t) => {\n    lines.push(String(t));\n    lines.push(\"-\".repeat(Math.max(6, String(t).length)));\n  };\n\n  const h2 = (t) => {\n    lines.push(String(t).toUpperCase());\n  };\n\n  const addBlank = () => lines.push(\"\");\n\n  const renderList = (items, indent = \"\") => {\n    return items.map((x) => `${indent}• ${String(x)}`);\n  };\n\n  const renderAnyValueAsList = (value) => {\n    if (isNonEmptyArray(value)) return value.map((x) => String(x));\n    if (isNonEmptyString(value)) return [value.trim()];\n    if (value && typeof value === \"object\") {\n      const out = [];\n      for (const [k, v] of Object.entries(value)) {\n        if (isNonEmptyArray(v)) out.push(`${titleCaseFromKey(k)}: ${v.join(\"; \")}`);\n        else if (isNonEmptyString(v)) out.push(`${titleCaseFromKey(k)}: ${v.trim()}`);\n      }\n      return out;\n    }\n    return [];\n  };\n\n  // ---------- Deck Title ----------\n  const deckTitle = isNonEmptyString(metadata.project_name)\n    ? metadata.project_name.trim()\n    : \"SLIDE DECK\";\n\n  h0(deckTitle);\n  addBlank();\n\n  // ---------- Cover meta ----------\n  const coverMeta = [];\n  if (isNonEmptyString(metadata.client_name)) coverMeta.push(`Client: ${metadata.client_name.trim()}`);\n  if (isNonEmptyString(metadata.generated_date)) coverMeta.push(`Generated: ${metadata.generated_date.trim()}`);\n  if (metadata.total_slides != null && String(metadata.total_slides).trim() !== \"\")\n    coverMeta.push(`Total Slides: ${String(metadata.total_slides).trim()}`);\n  if (isNonEmptyString(metadata.overall_confidence))\n    coverMeta.push(`Overall Confidence: ${metadata.overall_confidence.trim()}`);\n\n  if (coverMeta.length) {\n    h1(\"Cover\");\n    lines.push(...renderList(coverMeta));\n    addBlank();\n  }\n\n  if (isNonEmptyString(metadata.generation_notes)) {\n    h1(\"Generation Notes\");\n    lines.push(metadata.generation_notes.trim());\n    addBlank();\n  }\n\n  hr();\n  addBlank();\n\n  // ---------- Slides ----------\n  const slides = Object.values(slidesObj).filter((s) => s && typeof s === \"object\").sort(compareSlide);\n\n  const grouped = new Map();\n  for (const s of slides) {\n    const { major } = parseSlideId(s.slide_id);\n    if (!grouped.has(major)) grouped.set(major, []);\n    grouped.get(major).push(s);\n  }\n\n  const sectionTitle = (major) => `SECTION ${major}`;\n\n  for (const [major, sectionSlides] of grouped.entries()) {\n    h0(sectionTitle(major));\n    addBlank();\n\n    sectionSlides.forEach((slide) => {\n      const sid = String(slide.slide_id ?? \"\").trim();\n      const title = String(slide.slide_title ?? `Slide ${sid || \"\"}`).trim();\n      const templateRef = slide.template_reference ? String(slide.template_reference).trim() : \"\";\n      const conf = slide.confidence ? String(slide.confidence).trim() : \"\";\n\n      h1(`Slide ${sid} — ${title}`);\n      if (templateRef || conf) {\n        const metaBits = [];\n        if (templateRef) metaBits.push(`Template ${templateRef}`);\n        if (conf) metaBits.push(`Confidence: ${conf}`);\n        lines.push(metaBits.join(\" | \"));\n        addBlank();\n      }\n\n      const bullets = slide.bullets || {};\n      if (bullets && typeof bullets === \"object\") {\n        for (const [k, v] of Object.entries(bullets)) {\n          const list = renderAnyValueAsList(v);\n          if (!list.length) continue;\n\n          h2(titleCaseFromKey(k));\n          lines.push(...renderList(list));\n          addBlank();\n        }\n      }\n\n      const notes = slide.consultant_notes || {};\n      const hasNotes =\n        (notes && typeof notes === \"object\" && Object.keys(notes).length > 0) ||\n        isNonEmptyString(notes?.walkthrough_tip);\n\n      if (hasNotes) {\n        const noteBlocks = [];\n\n        if (isNonEmptyString(notes.walkthrough_tip)) {\n          noteBlocks.push({ label: \"Walkthrough Tip\", items: [notes.walkthrough_tip.trim()] });\n        }\n\n        const arrays = [\n          [\"Slide Notes\", notes.slide_notes],\n          [\"Gaps / Open Questions\", notes.gaps],\n          [\"Conflicts\", notes.conflicts],\n          [\"Ambiguity\", notes.ambiguity],\n        ];\n\n        for (const [label, val] of arrays) {\n          const list = renderAnyValueAsList(val);\n          if (list.length) noteBlocks.push({ label, items: list });\n        }\n\n        if (noteBlocks.length) {\n          h2(\"Presenter Notes\");\n          for (const block of noteBlocks) {\n            lines.push(`${block.label}:`);\n            lines.push(...renderList(block.items, \"  \"));\n          }\n          addBlank();\n        }\n      }\n\n      hr();\n      addBlank();\n    });\n  }\n\n  return lines.join(\"\\n\");\n}\n\n// Main logic — LLM sub-workflow returns { llm_response: <parsed JSON object> }\n// The sub-workflow's \"Parse JSON Response\" already handles JSON extraction and repair.\nconst webhook = $('1.1_TRG_Webhook').first().json.body;\nconst jsonData = $input.first().json.llm_response;\n\nif (!jsonData || typeof jsonData !== 'object') {\n  return [{\n    \"status\": \"error\",\n    \"error_message\": \"No valid LLM response received. Expected llm_response object.\",\n    \"client_id\": webhook.client_id,\n    \"client_name\": webhook.client_name,\n    \"project_id\": webhook.project_id,\n    \"project_name\": webhook.project_name,\n    \"workflow_id\": webhook.workflow_id,\n    \"workflow_name\": webhook.workflow_name,\n    \"workflow_session_id\": webhook.workflow_session_id,\n    \"workflow_session_name\": webhook.workflow_session_name\n  }];\n}\n\ntry {\n  var content = jsonToSlideDocText(jsonData);\n\n  return [{\n    \"status\": \"processed\",\n    \"agent_response\": jsonData,\n    \"content\": content,\n    \"google_drive_folder_id\": webhook.google_drive_folder_id,\n    \"client_id\": webhook.client_id,\n    \"client_name\": webhook.client_name,\n    \"project_id\": webhook.project_id,\n    \"project_name\": webhook.project_name,\n    \"workflow_id\": webhook.workflow_id,\n    \"workflow_name\": webhook.workflow_name,\n    \"workflow_session_id\": webhook.workflow_session_id,\n    \"workflow_session_name\": webhook.workflow_session_name\n  }];\n\n} catch(renderError) {\n  return [{\n    \"status\": \"error\",\n    \"error_message\": \"Rendering failed: \" + renderError.message,\n    \"agent_response\": jsonData,\n    \"client_id\": webhook.client_id,\n    \"client_name\": webhook.client_name,\n    \"project_id\": webhook.project_id,\n    \"project_name\": webhook.project_name,\n    \"workflow_id\": webhook.workflow_id,\n    \"workflow_name\": webhook.workflow_name,\n    \"workflow_session_id\": webhook.workflow_session_id,\n    \"workflow_session_name\": webhook.workflow_session_name\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        96
+      ],
+      "id": "js-parse-render-001",
+      "name": "5.2_JS_ParseAndRender",
+      "notes": "Parse JSON from LLM response, render slides to text for Google Doc. Includes robust JSON repair."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "parse-error-001",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "error",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        640,
+        96
+      ],
+      "id": "if-parse-error-001",
+      "name": "5.3_IF_ParseError",
+      "notes": "Check if JSON parsing/rendering failed (status === \"error\")"
+    },
+    {
+      "parameters": {
+        "driveId": "sharedWithMe",
+        "folderId": "={{ $json.google_drive_folder_id }}",
+        "title": "={{ $json.workflow_session_name }}_{{ (new Date()).getTime() }}"
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        864,
+        192
+      ],
+      "id": "gdoc-create-001",
+      "name": "6.1_GDOC_Create",
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "8Se5WgPUVSkK9BjF",
+          "name": "Test User Google Docs Account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Create a new Google Doc in the project Google Drive folder"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentURL": "={{ $json.id }}",
+        "simple": "={{ true }}",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "insert",
+              "text": "={{ $('5.2_JS_ParseAndRender').item.json.content }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        1088,
+        192
+      ],
+      "id": "gdoc-update-001",
+      "name": "6.2_GDOC_Update",
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "8Se5WgPUVSkK9BjF",
+          "name": "Test User Google Docs Account"
+        }
+      },
+      "notes": "Insert rendered slide content into the Google Doc"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://coreapi.ur-nl.com/workflow_sessions/{{ $('5.2_JS_ParseAndRender').item.json.workflow_session_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Subdomain",
+              "value": "dashboard"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={\n  \"workflow_session\": {\n    \"output_file_url\": \"https://docs.google.com/document/d/{{ $json.documentId }}\",\n    \"output_json\": {{ JSON.stringify($('5.2_JS_ParseAndRender').item.json.agent_response) }},\n    \"status\": \"completed\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1312,
+        192
+      ],
+      "id": "api-success-001",
+      "name": "7.1_API_ReportSuccess",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "9fZP8bOKRNJtilO1",
+          "name": "Jombay Staging API"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Report success to coreapi with output_file_url and output_json"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Centralized error formatter\nconst input = $input.first().json;\n\nfunction safeErrorExtract(error) {\n  if (!error) return null;\n  if (error instanceof Error || error.message) {\n    return {\n      message: error.message || 'Unknown error',\n      name: error.name,\n      stack: error.stack,\n      ...Object.keys(error).reduce((acc, key) => {\n        try { acc[key] = error[key]; } catch (e) {}\n        return acc;\n      }, {})\n    };\n  }\n  return error;\n}\n\nconst errorInfo = safeErrorExtract(input);\n\nreturn [{\n  json: {\n    status: 'error',\n    error_message: errorInfo?.message || input?.error_message || input?.body_error || 'Workflow execution failed',\n    workflow_session_id: $('1.1_TRG_Webhook').first().json.body.workflow_session_id,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        -200
+      ],
+      "id": "err-format-001",
+      "name": "8.1_ERR_Format",
+      "notes": "Centralized error formatter — all error paths converge here"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://coreapi.ur-nl.com/workflow_sessions/{{ $json.workflow_session_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Subdomain",
+              "value": "dashboard"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={   \"workflow_session\": {  \"status\": \"error\", \"error_message\": \"{{ $json.error_message }}\"   } } ",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2624,
+        -200
+      ],
+      "id": "err-api-001",
+      "name": "8.2_API_ReportError",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "9fZP8bOKRNJtilO1",
+          "name": "Jombay Staging API"
+        }
+      },
+      "notes": "Report error to coreapi with error_message and execution details"
+    }
+  ],
+  "connections": {
+    "1.1_TRG_Webhook": {
+      "main": [
+        [
+          {
+            "node": "2.1_IF_HasDocs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2.1_IF_HasDocs": {
+      "main": [
+        [
+          {
+            "node": "2.2_JS_SplitUrls",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "3.1_DT_GetPrompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2.2_JS_SplitUrls": {
+      "main": [
+        [
+          {
+            "node": "2.3_SUB_ExtractDoc",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2.3_SUB_ExtractDoc": {
+      "main": [
+        [
+          {
+            "node": "2.4_JS_CollectDocs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2.4_JS_CollectDocs": {
+      "main": [
+        [
+          {
+            "node": "3.1_DT_GetPrompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3.1_DT_GetPrompt": {
+      "main": [
+        [
+          {
+            "node": "3.2_FMT_BuildPrompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3.2_FMT_BuildPrompt": {
+      "main": [
+        [
+          {
+            "node": "4.1_SUB_CallLLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4.1_SUB_CallLLM": {
+      "main": [
+        [
+          {
+            "node": "5.1_IF_LLMError",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "8.1_ERR_Format",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5.1_IF_LLMError": {
+      "main": [
+        [
+          {
+            "node": "8.1_ERR_Format",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "5.2_JS_ParseAndRender",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5.2_JS_ParseAndRender": {
+      "main": [
+        [
+          {
+            "node": "5.3_IF_ParseError",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5.3_IF_ParseError": {
+      "main": [
+        [
+          {
+            "node": "8.1_ERR_Format",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "6.1_GDOC_Create",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6.1_GDOC_Create": {
+      "main": [
+        [
+          {
+            "node": "6.2_GDOC_Update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "8.1_ERR_Format",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6.2_GDOC_Update": {
+      "main": [
+        [
+          {
+            "node": "7.1_API_ReportSuccess",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "8.1_ERR_Format": {
+      "main": [
+        [
+          {
+            "node": "8.2_API_ReportError",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {
+    "1.1_TRG_Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "workflows.ur-nl.com",
+            "connection": "keep-alive",
+            "x-forwarded-for": "3.108.25.31, 10.0.1.209",
+            "x-forwarded-proto": "https",
+            "x-forwarded-host": "workflows.ur-nl.com",
+            "x-forwarded-port": "443",
+            "x-forwarded-path": "/webhook/f5edc4ba-1bff-409b-ba9c-7603d80d0ea2",
+            "x-real-ip": "3.108.25.31",
+            "x-kong-request-id": "09d87736c9262350a59a9051aa20d54d",
+            "content-length": "22464",
+            "x-amzn-trace-id": "Root=1-6981d68e-7d036ced346290416fdd5177",
+            "accept-encoding": "gzip;q=1.0,deflate;q=0.6,identity;q=0.3",
+            "accept": "*/*",
+            "user-agent": "Ruby",
+            "apikey": "test_jombay_n8n_key",
+            "content-type": "multipart/form-data; boundary=TxmyTlIAMBtfH9gC_cjIFtQtB1iWjCUyvGXD1S5PUqwVlU8WYe0XiQ"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "instructions": "",
+            "google_drive_folder_id": "",
+            "client_id": "697c8c84c3abb61f569165fb",
+            "client_name": "Test Account",
+            "project_id": "697cb1b4fdd167c8d12ed21c",
+            "project_name": "New Project5",
+            "project_details": "{\"project_components\":[],\"seniority_of_cohort\":[],\"cities_locations\":[],\"name\":\"New Project5\",\"description\":\"New Project\",\"background\":null,\"project_notes\":null,\"cohort_size_description_ac\":null,\"cohort_size_description_dj\":null,\"addresses_for_sessions\":null,\"facilitators_name\":null,\"assessors_name\":null,\"practice_type\":\"talent_advisory\",\"project_duration_months\":null,\"start_date\":\"2026-01-30T00:00:00.000Z\"}",
+            "workflow_id": "696494839a010f27656ad184",
+            "workflow_name": "PreWork Summary",
+            "workflow_session_id": "6981d685993e75c030239314",
+            "workflow_session_name": "Test",
+            "current_project_memory": "# Campus-to-Corporate Assessment Solution — Project Summary\n\n**Client:** Organization hiring 800–1,000 fresh graduates annually | **Updated:** Current | **Status:** Discovery Phase\n\n**Key Numbers:** 800–1,000 annual new hires | Three assessment dimensions | Multi-stage evaluation capability\n\n## Executive Summary\n\nThe client organization faces consistent readiness gaps among new graduate hires despite strong academic credentials. Current capability gaps center on communication skills, analytical thinking, and professional behavior—technical knowledge is generally sufficient. The organization currently provides internal post-hire training but lacks structured assessments to measure training effectiveness or readiness improvements.\n\nWe are proposing a Campus-to-Corporate assessment platform that evaluates candidates across three dimensions: technical competencies, cognitive abilities, and behavioral competencies. Assessments can be administered at multiple touchpoints: pre-hire (campus/drive), during training, and post-training to track progress over time.\n\n## Needs Your Attention\n\n**Critical Missing Information for Next Steps:**\n- **CQ-001:** Budget/commercial model alignment (see Questions We Need Answered)\n- **CQ-002:** Pilot timeline and scope definition (see Questions We Need Answered)\n- **CQ-003:** Existing system integrations and IT infrastructure (see Questions We Need Answered)\n- **CQ-004:** Decision authority and approval chain (see Questions We Need Answered)\n\n**Prior Context Gap:**\nMeeting notes reference previous discussion between Arjun and Rahul—prior conversation not included in current memory. **Action:** Confirm what was discussed/committed in earlier engagement.\n\n## Program Objectives & Success\n\n**Primary Business Outcomes:**\n- Measure and improve new graduate readiness for corporate environments\n- Quantify training program effectiveness through pre/post assessment comparison\n- Enable data-driven prioritization of training interventions\n- Reduce time-to-productivity for new hires\n\n**Success Criteria:**\n- Individual skill gap identification and remediation tracking\n- Batch-level performance visibility and improvement trends\n- Department-level skill distribution insights\n- Hiring quality metrics and readiness index\n\n**Currently Undefined:**\n- Baseline metrics (current pass/fail rates, time-to-productivity, attrition)\n- Specific improvement thresholds for pilot/rollout go-decision\n- Target adoption rates or engagement metrics\n\n## Scope & Delivery\n\n### Platform Capabilities\n\n**Assessment Dimensions:**\n- Technical competencies\n- Cognitive abilities\n- Behavioral competencies\n\n**Administration & Accessibility:**\n- Primarily online, mobile-friendly interface\n- Can be administered during campus drives or induction programs\n- Interface designed for fresh graduates without prior corporate experience\n- Candidates can complete via laptops or mobile devices\n\n**Customization & Flexibility:**\n- Assessments can be configured per role, department, or batch\n- Difficulty levels and focus areas adjustable by batch\n- Pre-training and post-training assessments to measure program impact\n- **Customization effort, timelines, and costs not yet detailed** (flagged as over-certainty risk)\n\n**Analytics & Insights:**\n- Real-time dashboards showing individual skill gaps, batch performance, and department-level summaries\n- Hiring quality metrics, readiness index, department-level skill distribution\n- Comparative analytics across batches and cohorts\n- Reports showing improvement at individual and group levels\n- Enables prioritization of training interventions based on identified gaps\n- **Data latency, update frequency, and reporting granularity not specified** (flagged as over-certainty risk)\n\n**Security & Integrity:**\n- Question randomization and time restrictions\n- Activity tracking and optional proctoring integrations\n- Designed to prevent cheating and misuse\n\n### What's Not Included (Pending Clarification)\n- Integration scope with existing HR/HRIS/LMS systems (pending client IT infrastructure assessment)\n- Specific training module content or delivery model\n- Client's current training program details\n- Data residency, compliance, or cloud readiness requirements\n\n## Risks & Concerns\n\n**Scope Creep Risk:** Customization commitment stated as \"Absolutely\" without detail on effort or costs. Client may assume zero-effort role/department tailoring. **Mitigation:** Define customization effort/timeline in solution walkthrough.\n\n**Integration Risk:** No discussion of existing assessment or learning management systems, HRIS, or HR data infrastructure. Data silos and rework risk if not mapped early. **Mitigation (CQ-003):** Audit client's HR tech stack before pilot scope definition.\n\n**ROI Attribution Risk:** Post-training improvement tracking presented as straightforward but no discussion of confounding variables (e.g., job experience, role difficulty, external factors). Client may over-interpret causation between training and assessment improvement. **Mitigation:** Define improvement measurement methodology and attribution boundaries during walkthrough.\n\n**Adoption Risk:** No acceptance criteria defined for pilot success or full rollout. Unclear what metrics determine go/no-go transition. **Mitigation (CQ-002):** Establish pilot KPIs (e.g., minimum improvement threshold, adoption rate target) in next meeting.\n\n**Stakeholder Alignment Risk:** IT/Security approval requirements unknown. Client may have data residency, compliance, or vendor security requirements that stall decision. **Mitigation (CQ-004):** Confirm decision authority and IT approval chain early.\n\n## Commitments & Decisions\n\n**What We've Agreed To:**\n- Schedule detailed solution walkthrough session\n- Demonstrate platform capabilities\n- Review customization options\n- Discuss pilot implementation approach\n\n**Participants Confirmed for Next Meeting:**\n- Client leadership\n- IT teams\n- (Names/titles pending)\n\n**Still Under Discussion:**\n- Pilot scope (department, batch size, duration, success criteria)\n- Commercial model and budget range\n- Implementation timeline\n- Integration requirements and data governance\n- Decision authority and approval chain\n\n## Stakeholders & Approvals\n\n**Decision Makers (Role-Based, Names Pending):**\n- Client leadership (approval on program adoption and budget)\n- IT/Security (approval on platform integration, data governance, vendor security)\n\n**Key Stakeholders (Mentioned by First Name):**\n- Arjun (involvement in prior discussion—context pending)\n- Rahul (involvement in prior discussion—context pending)\n- Phriya (solution provider contact, demonstrated platform capabilities)\n\n**Approval Process (Pending Clarification):**\n- Who owns final adoption decision: HR alone or joint HR/IT?\n- Does IT have mandatory compliance/security review before approval?\n- Are there departmental budget approvals required beyond leadership?\n\n## Key Insights\n\n**Current State Challenges:**\n- New graduates have strong academic records but lack corporate readiness\n- Capability gaps center on communication skills, analytical thinking, and professional behavior\n- Technical knowledge is generally sufficient (not primary gap)\n- Current internal training post-hire lacks structured assessment to measure effectiveness or readiness improvements\n- No baseline metrics on current hiring pass/fail rates, time-to-productivity, or attrition\n\n**Organizational Context (Pending Detail):**\n- Client hires 800–1,000 fresh graduates annually\n- Organizational structure (departmental breakdown, hiring patterns) not detailed\n- Current training program content, duration, and frequency not discussed\n- HR tech stack and compliance requirements (GDPR/data localization) not yet assessed\n\n## What Changed Recently\n\n- File processed: meeting_notes (Initial Campus-to-Corporate solution discussion)\n- Solution overview: Assessment platform for three competency dimensions, multi-stage evaluation capability\n- Next meeting scheduled for detailed walkthrough with client leadership and IT teams\n- **Critical gaps identified:** Budget model, pilot timeline, existing systems integration, decision authority—all flagged for clarification\n\n## Questions We Need Answered\n\n**CQ-001: Budget & Commercial Model** — HIGH Priority\n- **Category:** MISSING_INFO\n- **Section:** Commitments & Decisions\n- **Question:** What is the budget range or commercial model for this engagement (licensing, per-user, SaaS)? Does the client prefer annual subscription, per-assessment fee, or enterprise licensing?\n- **Why it matters:** Pricing sensitivity often surfaces late; early alignment prevents scope creep or deal friction. Budget directly affects scope and implementation approach.\n- **What we currently have:** No budget discussion or commercial model mentioned.\n- **What answer should look like:** \"Budget range: $X-$Y per year\" OR \"Per-user licensing: $X per assessment\" OR \"Enterprise SaaS: $X annually including unlimited customization and support\"\n- **AI recommendation:** Clarify commercial model upfront. Establish whether budget includes integration, customization, ongoing support, or if these are add-on fees. [Confidence: HIGH — standard enterprise software conversation]\n- **Source files:** meeting_notes\n\n**CQ-002: Pilot Timeline & Scope Definition** — HIGH Priority\n- **Category:** MISSING_INFO\n- **Section:** Commitments & Decisions\n- **Question:** What is the timeline for pilot implementation? (Start date, duration, cohort size, success criteria for pilot transition to full rollout?)\n- **Why it matters:** Without pilot boundaries, scope can expand or timelines slip post-implementation. Clear pilot KPIs ensure objective go/no-go decision.\n- **What we currently have:** \"Pilot implementation discussion\" mentioned as next step, but no specifics on scope, duration, or success criteria.\n- **What answer should look like:** \"Pilot: Q1 2025, 2-week window, single department (200 new hires), success criteria: ≥80% adoption, ≥15% improvement in post-training assessments\"\n- **AI recommendation:** During solution walkthrough, establish: Which department/batch size? 2-4 week pilot window? What metrics (adoption %, skill improvement threshold, user feedback score) determine go/no-go for full rollout? [Confidence: HIGH — standard pilot definition]\n- **Source files:** meeting_notes\n\n**CQ-003: Existing Systems Integration & IT Infrastructure** — HIGH Priority\n- **Category:** MISSING_INFO\n- **Section:** Scope & Delivery\n- **Question:** What existing assessment or learning management systems does the client currently use? Any integration requirements? (HRIS, LMS, HR data systems, cloud infrastructure, compliance/data residency requirements?)\n- **Why it matters:** Integration complexity often discovered late; early mapping prevents rework and data silos. IT infrastructure and compliance requirements affect implementation approach and timeline.\n- **What we currently have:** No discussion of current HR tech stack, HRIS, LMS, or compliance requirements (GDPR, data localization).\n- **What answer should look like:** \"We use [LMS name] + [HRIS name]; need integration via API. We're cloud-ready (AWS). Data must reside in India (GDPR not applicable but internal policy).\" OR \"No integrations required, standalone platform acceptable.\"\n- **AI recommendation:** Before solution walkthrough, request: (1) Client's current HR/training systems landscape, (2) Cloud readiness and infrastructure preferences, (3) Any compliance/data residency requirements (GDPR, local data laws, internal policy). Identify integration points and effort upfront. [Confidence: HIGH — standard IT readiness assessment]\n- **Source files:** meeting_notes\n\n**CQ-004: Decision Authority & Approval Chain** — HIGH Priority\n- **Category:** MISSING_INFO\n- **Section:** Stakeholders & Approvals\n- **Question:** Who owns the final decision on adoption: HR alone, or does IT/Security need approval? What is the approval chain and timeline?\n- **Why it matters:** Stakeholder alignment accelerates decision-making; absence of IT buy-in risks project stall. Unclear authority causes delays when requirements emerge post-discussion.\n- **What we currently have:** Next meeting includes \"client leadership and IT teams,\" but decision authority not confirmed. Names/titles of decision makers not specified.\n- **What answer should look like:** \"HR Director (Priya Sharma) owns final decision; IT Security (Rajesh Verma) must approve data governance/vendor security; both report to VP People.\" OR \"HR Director has full authority; IT is advisory only.\"\n- **AI recommendation:** In solution walkthrough, confirm: (1) Who signs off on budget/go-decision, (2) Does IT have veto authority or advisory role, (3) Are there mandatory compliance reviews or vendor security assessments, (4) What is approval timeline (days/weeks post-pilot). Identify and engage all decision makers. [Confidence: HIGH — standard stakeholder mapping]\n- **Source files:** meeting_notes\n\n**CQ-005: Baseline Metrics & ROI Definition** — MEDIUM Priority\n- **Category:** MISSING_INFO\n- **Section:** Program Objectives & Success\n- **Question:** What are the client's current baseline metrics on new hire readiness? (Current pass/fail rates on assessments, time-to-productivity, attrition in first year, training effectiveness measures?)\n- **Why it matters:** Baseline metrics establish ROI foundation. Without baseline, cannot objectively measure solution impact or justify continued investment.\n- **What we currently have:** Problem described (gaps in communication, analytical thinking, professional behavior) but no quantified baseline (e.g., \"30% of new hires fail communication assessments\" or \"6 months average time-to-productivity\").\n- **What answer should look like:** \"Currently 35% of new hires score below target on communication; average time-to-full-productivity is 5 months; first-year voluntary attrition is 18%.\" OR \"We don't track these metrics currently.\"\n- **AI recommendation:** If baseline not available: Propose baseline-setting phase in pilot (establish current metrics before pilot training begins). If baseline exists: Extract numbers and define improvement targets for pilot success criteria. [Confidence: MEDIUM — depends on client's HR analytics maturity]\n- **Source files:** meeting_notes\n\n**CQ-006: Customization Effort & Cost** — MEDIUM Priority\n- **Category:** AMBIGUITY\n- **Section:** Scope & Delivery - Customization & Flexibility\n- **Question:** What is the effort, timeline, and cost for customizing assessments per role/department/batch? Are there standard templates or is all customization bespoke?\n- **Why it matters:** \"Customization is absolutely possible\" (stated affirmatively) without detail on effort or costs. Client may assume zero-effort tailoring; late cost discovery causes deal friction.\n- **What we currently have:** Statement: \"Assessments can be configured per role, department, or batch. Difficulty levels and focus areas adjustable by batch.\" No discussion of customization effort, timelines, or whether costs are included in base licensing.\n- **What answer should look like:** \"Customization included in enterprise license: up to 5 custom role profiles, 2 difficulty levels per department. Additional customization: $X per profile. Turnaround: 2 weeks per profile.\" OR \"All customization is standard template-based, no additional cost.\"\n- **AI recommendation:** In solution walkthrough, clarify: (1) What customization is included in base license, (2) What customization is available as add-on (cost/timeline), (3) Provide 2-3 customization examples (e.g., custom profile for \"Sales Graduate\" vs. \"IT Graduate\") and effort estimates. [Confidence: HIGH — product feature clarification]\n- **Source files:** meeting_notes\n\n**CQ-007: Data & Reporting Specifications** — MEDIUM Priority\n- **Category:** AMBIGUITY\n- **Section:** Scope & Delivery - Analytics & Insights\n- **Question:** What is the data latency, update frequency, and reporting granularity for real-time dashboards? (Data refreshed hourly/daily? Drill-down to individual candidate? Report export formats and customization?)\n- **Why it matters:** \"Real-time dashboards\" mentioned but reporting cadence and granularity not defined. Client may have reporting expectations (e.g., live dashboards every hour) that platform cannot meet, or may require specific export formats for their own BI systems.\n- **What we currently have:** \"Real-time dashboards showing individual skill gaps, batch performance, and department-level summaries.\" No specification on data refresh frequency, drill-down capability, or export/integration options.\n- **What answer should look like:** \"Dashboards update every 4 hours. Drill-down available to individual candidate, department, cohort. Reports exportable to CSV/Excel. API available for BI system integration.\" OR \"Real-time means next business day; export to Excel only.\"\n- **AI recommendation:** During demo in next meeting, specify: (1) Actual data update frequency (not just \"real-time\"), (2) Reporting granularity (individual, department, batch, cross-batch comparison?), (3) Standard reports vs. custom report capability, (4) Export formats and BI/HRIS integration options. [Confidence: HIGH — product capability clarification]\n- **Source files:** meeting_notes\n\n**CQ-008: Causation vs. Correlation in Post-Training Improvements** — MEDIUM Priority\n- **Category:** AMBIGUITY\n- **Section:** Key Insights\n- **Question:** How does the client plan to isolate training impact from confounding variables (e.g., job experience, role difficulty, external factors) when measuring post-training assessment improvement?\n- **Why it matters:** Improvement tracking presented as straightforward but no discussion of attribution methodology. Client may over-interpret causation (\"training caused skill X improvement\") without accounting for confounds. Late disagreement on ROI attribution damages credibility.\n- **What we currently have:** Statement: \"Reports showing improvement at individual and group levels\" and \"Enables prioritization of training interventions based on identified gaps.\" No discussion of measurement methodology or attribution control (e.g., control group, pre/post experimental design).\n- **What answer should look like:** \"We'll compare pre-training to post-training scores. We understand that improvement may reflect both training and on-job experience. We'll track improvement by department/role to spot patterns. We don't expect 100% training attribution.\" OR \"We need statistical controls (control group) to isolate training impact.\"\n- **AI recommendation:** In solution design phase, clarify: (1) Client's expectations on attributing improvement to training vs. other factors, (2) Whether client wants control group (more rigorous but requires pulling some new hires out of training—usually not feasible), (3) Standard approach: Report pre/post scores, context with job role/tenure/department, qualitative feedback from training teams. Set expectations on what can/cannot be proven. [Confidence: MEDIUM — depends on client's research rigor expectations]\n- **Source files:** meeting_notes\n\n**CQ-009: Prior Engagement Context — Arjun & Rahul Discussion** — MEDIUM Priority\n- **Category:** MISSING_INFO\n- **Section:** Commitments & Decisions\n- **Question:** What was discussed in the prior conversation between Arjun and Rahul? What commitments or context were established?\n- **Why it matters:** Meeting notes reference \"previous discussion between Arjun and Rahul.\" Current memory does not include prior conversation. Gaps in context may affect understanding of client expectations or commitments already made.\n- **What we currently have:** Reference to prior discussion exists; full content unknown.\n- **What answer should look like:** Summary of prior discussion (e.g., \"Arjun and Rahul discussed platform capabilities and budget ballpark of $50K. Rahul committed to next meeting by Jan 15.\") OR \"Share prior meeting notes/transcript.\"\n- **AI recommendation:** Obtain full context from Arjun/Rahul before next client meeting. Ensure current team understands prior scope and commitments to avoid contradictions. [Confidence: HIGH — factual retrieval]\n- **Source files:** meeting_notes (reference only; full content pending)\n",
+            "documents_urls": ""
+          },
+          "webhookUrl": "https://workflows.ur-nl.com/webhook/f5edc4ba-1bff-409b-ba9c-7603d80d0ea2",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,391 @@
+{
+  "updatedAt": "2026-02-08T09:41:44.519Z",
+  "createdAt": "2026-02-04T09:02:50.380Z",
+  "id": "1DR7SBmbHnVajdbxTl5Vu",
+  "name": "[DEV] LLM Sub-workflow",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "workflow_session_id",
+              "type": "any"
+            },
+            {
+              "name": "workflow_id",
+              "type": "any"
+            },
+            {
+              "name": "project_id",
+              "type": "any"
+            },
+            {
+              "name": "client_id",
+              "type": "any"
+            },
+            {
+              "name": "prompt",
+              "type": "any"
+            },
+            {
+              "name": "model",
+              "type": "string"
+            },
+            {
+              "name": "node_name",
+              "type": "string"
+            },
+            {
+              "name": "memory_id",
+              "type": "any"
+            },
+            {
+              "name": "knowledge_base_id",
+              "type": "any"
+            },
+            {
+              "name": "system_prompt",
+              "type": "any"
+            }
+          ]
+        }
+      },
+      "id": "951675a3-92b6-4774-8059-cc752e7fb8f3",
+      "typeVersion": 1.1,
+      "name": "Start",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [
+        -768,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://agentcoreapi.jombay.com",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ (() => {\n  const PREFIX = 'Return raw JSON only. Do not use ```json or ``` markdown formatting.\\n\\n';\n  const SUFFIX = '\\n\\nCRITICAL RULES FOR OUTPUT:\\n- NO markdown code fences (no ```json or ```)\\n- NO explanations, preambles, or postambles\\n- NO text before or after the JSON\\n- NO comments inside the JSON\\n- Output must be ONLY valid JSON\\n- Output MUST start with { or [\\n- Output MUST end with } or ]';\n  const fullPrompt = PREFIX + $json.prompt + SUFFIX;\n  const sessionId = $json.workflow_session_id || 'session_default';\n  const runtimeId = 'runtime_session_' + sessionId + '_' + Date.now();\n  const payload = {\n    prompt: fullPrompt,\n    workflow_id: $json.workflow_id || 'workflow_default',\n    client_id: $json.client_id || 'client_default',\n    project_id: $json.project_id || 'project_default',\n    workflow_session_id: sessionId,\n    model: $json.model || 'global.anthropic.claude-haiku-4-5-20251001-v1:0',\n    runtimeSessionId: runtimeId\n  };\n  if ($json.memory_id) payload.memory_id = $json.memory_id;\n  if ($json.knowledge_base_id) payload.knowledge_base_id = $json.knowledge_base_id;\n  if ($json.system_prompt) payload.system_prompt = $json.system_prompt;\n  return JSON.stringify(payload);\n})() }}",
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -560,
+        144
+      ],
+      "id": "a1e4c083-2b0a-4165-ac64-b4b1d6d599bf",
+      "name": "HTTP Request",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generic LLM response parser\n// Returns { llm_response: parsedJson } on success\n// Throws error with raw response on failure (for debugging)\n\nconst httpResponse = $input.first().json;\nconst startData = $('Start').item.json;\nconst nodeName = startData.node_name || 'Unknown';\n\n// Robust JSON parsing function - handles various LLM response formats\nfunction parseJsonRobust(response) {\n  if (!response) return null;\n  \n  let cleaned = typeof response === 'string' ? response : String(response);\n  cleaned = cleaned.trim();\n  \n  // Try 1: Parse as-is\n  try { return JSON.parse(cleaned); } catch (e) {}\n  \n  // Try 2: Remove markdown code fences with json identifier (handles ```json [line 86] etc)\n  if (cleaned.startsWith('```json')) {\n    const withoutFences = cleaned.replace(/^```json[^\\n]*\\n?/, '').replace(/\\n?```\\s*$/, '').trim();\n    try { return JSON.parse(withoutFences); } catch (e) {}\n  }\n  \n  // Try 3: Remove generic markdown code fences\n  if (cleaned.startsWith('```')) {\n    const withoutFences = cleaned.replace(/^```[^\\n]*\\n?/, '').replace(/\\n?```\\s*$/, '').trim();\n    try { return JSON.parse(withoutFences); } catch (e) {}\n  }\n  \n  // Try 4: Find JSON block between any code fences (handles annotations like [line X])\n  const codeBlockMatch = cleaned.match(/```(?:json)?[^\\n]*\\n?([\\s\\S]*?)\\n?```/);\n  if (codeBlockMatch && codeBlockMatch[1]) {\n    try { return JSON.parse(codeBlockMatch[1].trim()); } catch (e) {}\n  }\n  \n  // Try 5: Remove common prefixes\n  const prefixPatterns = [/^Here's the JSON:?\\s*/i, /^Here is the JSON:?\\s*/i, /^JSON:?\\s*/i, /^Response:?\\s*/i, /^Output:?\\s*/i, /^Result:?\\s*/i];\n  for (const pattern of prefixPatterns) {\n    if (pattern.test(cleaned)) {\n      const withoutPrefix = cleaned.replace(pattern, '').trim();\n      try { return JSON.parse(withoutPrefix); } catch (e) {\n        const withoutFences = withoutPrefix.replace(/^```(?:json)?[^\\n]*\\n?/, '').replace(/\\n?```\\s*$/, '').trim();\n        try { return JSON.parse(withoutFences); } catch (e2) {}\n      }\n    }\n  }\n  \n  // Try 6: Extract JSON from surrounding text (most permissive - find first { or [ to last } or ])\n  const jsonStartBrace = cleaned.indexOf('{');\n  const jsonStartBracket = cleaned.indexOf('[');\n  const jsonStart = jsonStartBrace !== -1 && jsonStartBracket !== -1 ? Math.min(jsonStartBrace, jsonStartBracket) : Math.max(jsonStartBrace, jsonStartBracket);\n  const jsonEndBrace = cleaned.lastIndexOf('}');\n  const jsonEndBracket = cleaned.lastIndexOf(']');\n  const jsonEnd = jsonEndBrace !== -1 && jsonEndBracket !== -1 ? Math.max(jsonEndBrace, jsonEndBracket) : Math.max(jsonEndBrace, jsonEndBracket);\n  \n  if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {\n    const extracted = cleaned.substring(jsonStart, jsonEnd + 1);\n    try { return JSON.parse(extracted); } catch (e) {\n      // Try fixing common JSON issues\n      const fixed = extracted.replace(/,\\s*}/g, '}').replace(/,\\s*]/g, ']').replace(/([{,]\\s*)(\\w+)(\\s*:)/g, '$1\"$2\"$3');\n      try { return JSON.parse(fixed); } catch (e2) {}\n    }\n  }\n  \n  return null;\n}\n\n// Check HTTP Status\nif (httpResponse.statusCode && httpResponse.statusCode >= 400) {\n  throw new Error(`[${nodeName}] HTTP ${httpResponse.statusCode}: ${httpResponse.body?.error || 'No details'}`);\n}\n\n// Extract agent_response\nlet agentResponse = httpResponse.body?.agent_response || httpResponse.agent_response || httpResponse.body?.response || httpResponse.response;\nif (!agentResponse && typeof httpResponse.body === 'string') agentResponse = httpResponse.body;\n\nif (!agentResponse) {\n  if (httpResponse.body?.error) throw new Error(`[${nodeName}] API error: ${httpResponse.body.error}`);\n  throw new Error(`[${nodeName}] No agent_response in HTTP response. Keys: ${Object.keys(httpResponse.body || {}).join(', ')}`);\n}\n\n// Parse JSON\nconst parsedJson = parseJsonRobust(agentResponse);\nif (!parsedJson) {\n  // Include raw LLM response in error for debugging\n  throw new Error(`[${nodeName}] JSON parse failed. Raw response: ${String(agentResponse).substring(0, 500)}`);\n}\n\n// Return wrapped in llm_response key (no validation, no merging)\nreturn [{ json: { llm_response: parsedJson } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -352,
+        144
+      ],
+      "id": "07f063ee-5ea1-4300-980c-53f40a7172c5",
+      "name": "Parse JSON Response",
+      "notes": "Generic parser - returns { llm_response: parsedJson }"
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Parse JSON Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {},
+  "versionId": "0b961d20-9819-43bc-bd1d-d3276e7c77ed",
+  "activeVersionId": "0b961d20-9819-43bc-bd1d-d3276e7c77ed",
+  "versionCounter": 91,
+  "triggerCount": 0,
+  "shared": [
+    {
+      "updatedAt": "2026-02-04T09:02:50.380Z",
+      "createdAt": "2026-02-04T09:02:50.380Z",
+      "role": "workflow:owner",
+      "workflowId": "1DR7SBmbHnVajdbxTl5Vu",
+      "projectId": "JIV2elLHsVFXybZ2",
+      "project": {
+        "updatedAt": "2025-12-05T03:44:52.986Z",
+        "createdAt": "2025-12-05T02:56:21.571Z",
+        "id": "JIV2elLHsVFXybZ2",
+        "name": "Niket Puranik <niket@jombay.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "8083cc02-c696-4bbe-91a2-08d8a36f6735",
+        "projectRelations": [
+          {
+            "updatedAt": "2025-12-05T02:56:21.571Z",
+            "createdAt": "2025-12-05T02:56:21.571Z",
+            "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735",
+            "projectId": "JIV2elLHsVFXybZ2",
+            "user": {
+              "updatedAt": "2026-02-08T06:49:36.399Z",
+              "createdAt": "2025-12-05T02:55:59.706Z",
+              "id": "8083cc02-c696-4bbe-91a2-08d8a36f6735",
+              "email": "niket@jombay.com",
+              "firstName": "Niket",
+              "lastName": "Puranik",
+              "personalizationAnswers": {
+                "version": "v4",
+                "personalization_survey_submitted_at": "2025-12-05T03:46:42.524Z",
+                "personalization_survey_n8n_version": "1.122.5",
+                "companySize": "<20",
+                "companyType": "saas",
+                "role": "business-owner",
+                "reportedSource": "google"
+              },
+              "settings": {
+                "userActivated": true,
+                "easyAIWorkflowOnboarded": true,
+                "firstSuccessfulWorkflowId": "wjR2j2YRVwBR3XNq",
+                "userActivatedAt": 1764936522539,
+                "npsSurvey": {
+                  "responded": true,
+                  "lastShownAt": 1768980421286
+                }
+              },
+              "disabled": false,
+              "mfaEnabled": false,
+              "lastActiveAt": "2026-02-08",
+              "isPending": false
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-02-05T09:55:11.237Z",
+    "createdAt": "2026-02-05T09:55:11.237Z",
+    "versionId": "0b961d20-9819-43bc-bd1d-d3276e7c77ed",
+    "workflowId": "1DR7SBmbHnVajdbxTl5Vu",
+    "nodes": [
+      {
+        "parameters": {
+          "workflowInputs": {
+            "values": [
+              {
+                "name": "workflow_session_id",
+                "type": "any"
+              },
+              {
+                "name": "workflow_id",
+                "type": "any"
+              },
+              {
+                "name": "project_id",
+                "type": "any"
+              },
+              {
+                "name": "client_id",
+                "type": "any"
+              },
+              {
+                "name": "prompt",
+                "type": "any"
+              },
+              {
+                "name": "model",
+                "type": "string"
+              },
+              {
+                "name": "node_name",
+                "type": "string"
+              },
+              {
+                "name": "memory_id",
+                "type": "any"
+              },
+              {
+                "name": "knowledge_base_id",
+                "type": "any"
+              },
+              {
+                "name": "system_prompt",
+                "type": "any"
+              }
+            ]
+          }
+        },
+        "id": "951675a3-92b6-4774-8059-cc752e7fb8f3",
+        "typeVersion": 1.1,
+        "name": "Start",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "position": [
+          -768,
+          144
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://agentcoreapi.jombay.com",
+          "sendBody": true,
+          "contentType": "raw",
+          "rawContentType": "application/json",
+          "body": "={{ (() => {\n  const PREFIX = 'Return raw JSON only. Do not use ```json or ``` markdown formatting.\\n\\n';\n  const SUFFIX = '\\n\\nCRITICAL RULES FOR OUTPUT:\\n- NO markdown code fences (no ```json or ```)\\n- NO explanations, preambles, or postambles\\n- NO text before or after the JSON\\n- NO comments inside the JSON\\n- Output must be ONLY valid JSON\\n- Output MUST start with { or [\\n- Output MUST end with } or ]';\n  const fullPrompt = PREFIX + $json.prompt + SUFFIX;\n  const sessionId = $json.workflow_session_id || 'session_default';\n  const runtimeId = 'runtime_session_' + sessionId + '_' + Date.now();\n  const payload = {\n    prompt: fullPrompt,\n    workflow_id: $json.workflow_id || 'workflow_default',\n    client_id: $json.client_id || 'client_default',\n    project_id: $json.project_id || 'project_default',\n    workflow_session_id: sessionId,\n    model: $json.model || 'global.anthropic.claude-haiku-4-5-20251001-v1:0',\n    runtimeSessionId: runtimeId\n  };\n  if ($json.memory_id) payload.memory_id = $json.memory_id;\n  if ($json.knowledge_base_id) payload.knowledge_base_id = $json.knowledge_base_id;\n  if ($json.system_prompt) payload.system_prompt = $json.system_prompt;\n  return JSON.stringify(payload);\n})() }}",
+          "options": {
+            "timeout": 600000
+          }
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.3,
+        "position": [
+          -560,
+          144
+        ],
+        "id": "a1e4c083-2b0a-4165-ac64-b4b1d6d599bf",
+        "name": "HTTP Request",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 3000,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Generic LLM response parser\n// Returns { llm_response: parsedJson } on success\n// Throws error with raw response on failure (for debugging)\n\nconst httpResponse = $input.first().json;\nconst startData = $('Start').item.json;\nconst nodeName = startData.node_name || 'Unknown';\n\n// Robust JSON parsing function - handles various LLM response formats\nfunction parseJsonRobust(response) {\n  if (!response) return null;\n  \n  let cleaned = typeof response === 'string' ? response : String(response);\n  cleaned = cleaned.trim();\n  \n  // Try 1: Parse as-is\n  try { return JSON.parse(cleaned); } catch (e) {}\n  \n  // Try 2: Remove markdown code fences with json identifier (handles ```json [line 86] etc)\n  if (cleaned.startsWith('```json')) {\n    const withoutFences = cleaned.replace(/^```json[^\\n]*\\n?/, '').replace(/\\n?```\\s*$/, '').trim();\n    try { return JSON.parse(withoutFences); } catch (e) {}\n  }\n  \n  // Try 3: Remove generic markdown code fences\n  if (cleaned.startsWith('```')) {\n    const withoutFences = cleaned.replace(/^```[^\\n]*\\n?/, '').replace(/\\n?```\\s*$/, '').trim();\n    try { return JSON.parse(withoutFences); } catch (e) {}\n  }\n  \n  // Try 4: Find JSON block between any code fences (handles annotations like [line X])\n  const codeBlockMatch = cleaned.match(/```(?:json)?[^\\n]*\\n?([\\s\\S]*?)\\n?```/);\n  if (codeBlockMatch && codeBlockMatch[1]) {\n    try { return JSON.parse(codeBlockMatch[1].trim()); } catch (e) {}\n  }\n  \n  // Try 5: Remove common prefixes\n  const prefixPatterns = [/^Here's the JSON:?\\s*/i, /^Here is the JSON:?\\s*/i, /^JSON:?\\s*/i, /^Response:?\\s*/i, /^Output:?\\s*/i, /^Result:?\\s*/i];\n  for (const pattern of prefixPatterns) {\n    if (pattern.test(cleaned)) {\n      const withoutPrefix = cleaned.replace(pattern, '').trim();\n      try { return JSON.parse(withoutPrefix); } catch (e) {\n        const withoutFences = withoutPrefix.replace(/^```(?:json)?[^\\n]*\\n?/, '').replace(/\\n?```\\s*$/, '').trim();\n        try { return JSON.parse(withoutFences); } catch (e2) {}\n      }\n    }\n  }\n  \n  // Try 6: Extract JSON from surrounding text (most permissive - find first { or [ to last } or ])\n  const jsonStartBrace = cleaned.indexOf('{');\n  const jsonStartBracket = cleaned.indexOf('[');\n  const jsonStart = jsonStartBrace !== -1 && jsonStartBracket !== -1 ? Math.min(jsonStartBrace, jsonStartBracket) : Math.max(jsonStartBrace, jsonStartBracket);\n  const jsonEndBrace = cleaned.lastIndexOf('}');\n  const jsonEndBracket = cleaned.lastIndexOf(']');\n  const jsonEnd = jsonEndBrace !== -1 && jsonEndBracket !== -1 ? Math.max(jsonEndBrace, jsonEndBracket) : Math.max(jsonEndBrace, jsonEndBracket);\n  \n  if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {\n    const extracted = cleaned.substring(jsonStart, jsonEnd + 1);\n    try { return JSON.parse(extracted); } catch (e) {\n      // Try fixing common JSON issues\n      const fixed = extracted.replace(/,\\s*}/g, '}').replace(/,\\s*]/g, ']').replace(/([{,]\\s*)(\\w+)(\\s*:)/g, '$1\"$2\"$3');\n      try { return JSON.parse(fixed); } catch (e2) {}\n    }\n  }\n  \n  return null;\n}\n\n// Check HTTP Status\nif (httpResponse.statusCode && httpResponse.statusCode >= 400) {\n  throw new Error(`[${nodeName}] HTTP ${httpResponse.statusCode}: ${httpResponse.body?.error || 'No details'}`);\n}\n\n// Extract agent_response\nlet agentResponse = httpResponse.body?.agent_response || httpResponse.agent_response || httpResponse.body?.response || httpResponse.response;\nif (!agentResponse && typeof httpResponse.body === 'string') agentResponse = httpResponse.body;\n\nif (!agentResponse) {\n  if (httpResponse.body?.error) throw new Error(`[${nodeName}] API error: ${httpResponse.body.error}`);\n  throw new Error(`[${nodeName}] No agent_response in HTTP response. Keys: ${Object.keys(httpResponse.body || {}).join(', ')}`);\n}\n\n// Parse JSON\nconst parsedJson = parseJsonRobust(agentResponse);\nif (!parsedJson) {\n  // Include raw LLM response in error for debugging\n  throw new Error(`[${nodeName}] JSON parse failed. Raw response: ${String(agentResponse).substring(0, 500)}`);\n}\n\n// Return wrapped in llm_response key (no validation, no merging)\nreturn [{ json: { llm_response: parsedJson } }];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -352,
+          144
+        ],
+        "id": "07f063ee-5ea1-4300-980c-53f40a7172c5",
+        "name": "Parse JSON Response",
+        "notes": "Generic parser - returns { llm_response: parsedJson }"
+      }
+    ],
+    "connections": {
+      "Start": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HTTP Request": {
+        "main": [
+          [
+            {
+              "node": "Parse JSON Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Niket Puranik",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-02-06T13:40:00.477Z",
+        "id": 2049,
+        "workflowId": "1DR7SBmbHnVajdbxTl5Vu",
+        "versionId": "0b961d20-9819-43bc-bd1d-d3276e7c77ed",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-08T08:57:31.750Z",
+        "id": 2080,
+        "workflowId": "1DR7SBmbHnVajdbxTl5Vu",
+        "versionId": "0b961d20-9819-43bc-bd1d-d3276e7c77ed",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-08T09:39:19.486Z",
+        "id": 2083,
+        "workflowId": "1DR7SBmbHnVajdbxTl5Vu",
+        "versionId": "0b961d20-9819-43bc-bd1d-d3276e7c77ed",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-08T09:41:44.573Z",
+        "id": 2086,
+        "workflowId": "1DR7SBmbHnVajdbxTl5Vu",
+        "versionId": "0b961d20-9819-43bc-bd1d-d3276e7c77ed",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-05T09:55:11.282Z",
+        "id": 1916,
+        "workflowId": "1DR7SBmbHnVajdbxTl5Vu",
+        "versionId": "0b961d20-9819-43bc-bd1d-d3276e7c77ed",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-05T10:34:42.075Z",
+        "id": 1949,
+        "workflowId": "1DR7SBmbHnVajdbxTl5Vu",
+        "versionId": "0b961d20-9819-43bc-bd1d-d3276e7c77ed",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-06T01:13:09.934Z",
+        "id": 1982,
+        "workflowId": "1DR7SBmbHnVajdbxTl5Vu",
+        "versionId": "0b961d20-9819-43bc-bd1d-d3276e7c77ed",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      }
+    ]
+  }
+}

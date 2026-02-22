@@ -1,0 +1,1234 @@
+{
+  "updatedAt": "2026-02-19T02:26:04.870Z",
+  "createdAt": "2026-01-25T17:38:50.825Z",
+  "id": "PDjuao8X0zSNWvvN",
+  "name": "[STG] Pre-Work Summary",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "/staging/pre-work-summary",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1600,
+        0
+      ],
+      "id": "trg-webhook-001",
+      "name": "1.1_TRG_Webhook",
+      "webhookId": "pre-work-summary-stg-v1",
+      "notes": "Entry point: Receives pre-work summary generation requests via webhook. Returns 200 immediately (default onReceived mode)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "has-docs-001",
+              "leftValue": "={{ $json.body.documents_urls }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1376,
+        0
+      ],
+      "id": "if-has-docs-001",
+      "name": "2.1_IF_HasDocs",
+      "notes": "Check if documents_urls field exists and is non-empty"
+    },
+    {
+      "parameters": {
+        "jsCode": "const urls = $('1.1_TRG_Webhook').first().json.body.documents_urls.split(',').map(u => u.trim()).filter(u => u.length > 0);\nreturn urls.map(url => ({ json: { mode: 'EXTRACT_CONTENT', google_drive_file_url: url } }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1152,
+        -144
+      ],
+      "id": "js-split-urls-001",
+      "name": "2.2_JS_SplitUrls",
+      "notes": "Split comma-separated document URLs into individual items for drive-utils"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "8N4Pzq6oTI5ligt4r8ZJ4"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        -928,
+        -144
+      ],
+      "id": "sub-extract-doc-001",
+      "name": "2.3_SUB_ExtractDoc",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000,
+      "continueOnFail": true,
+      "notes": "Call drive-utils sub-workflow to extract text from each document URL"
+    },
+    {
+      "parameters": {
+        "jsCode": "const docs = [];\nfor (const item of $input.all()) {\n  if (item.json.extracted_text && item.json.status === 'success') {\n    docs.push(item.json.extracted_text);\n  }\n}\nreturn [{ json: { extracted_documents: docs, has_documents: docs.length > 0 } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -704,
+        -144
+      ],
+      "id": "js-collect-docs-001",
+      "name": "2.4_JS_CollectDocs",
+      "notes": "Aggregate all successfully extracted document texts into a single array"
+    },
+    {
+      "parameters": {
+        "jsCode": "const webhook = $('1.1_TRG_Webhook').first().json.body;\n\n// Inline prompt template\nlet prompt = \"# PRE-WORK SLIDE CONTENT GENERATION PROMPT\\n\\n---\\n\\n## 1. ROLE & MISSION\\n\\nYou are a **Senior Presentation Architect and Leadership Development Consultant** at Jombay. Your mission: Generate 12 pre-work slides enabling POD Owners to deliver client walkthroughs with <10% editing needed.\\n\\n**Operating Principles:**\\n\\n| Principle | Meaning |\\n|-----------|---------|\\n| **Epistemic Purity** | Every claim traces to inputs. No hallucination. No over-inference. |\\n| **Delivery Usability** | Output optimized for consultant to present confidently. |\\n\\n---\\n\\n## 2. INPUT STRUCTURE\\n\\nInputs are appended at the end of this prompt.\\n\\n### Fixed Inputs (Always Present)\\n- **`<project_details>`** \u2014 Client name, industry, participant count, scope, timeline, delivery mode\\n- **`<project_summary>`** \u2014 Consolidated FGDs (participants, managers, leaders), interviews, discovery notes. **This is your PRIMARY evidence source.**\\n\\n### Variable Inputs (If Available)\\n- **`<ctm>`** \u2014 CTM or client's competency model\\n- **`<project_documents>`** \u2014 Strategy docs, values, org structure, other materials\\n\\n**Rule:** If variable inputs are absent, generate using fixed inputs. Flag in `gaps` where CTM/docs would strengthen content.\\n\\n---\\n\\n## 3. EVIDENCE FRAMEWORK\\n\\n### 3.1 Evidence Tiers\\n\\n| Tier | Type | Examples | Use For |\\n|------|------|----------|---------|\\n| **T1** | Verbatim quotes | \\\"Participant said: 'I escalate because...'\\\" | Slides 2.3, 2.4 ONLY |\\n| **T2** | FGD observations | \\\"Participants reported struggling with...\\\" | All slides |\\n| **T3** | Gap analysis / Discovery notes | \\\"Discovery identified ~80% dependency\\\" | All slides |\\n| **T4** | Leadership interviews | \\\"Leaders expect managers to...\\\" | Desired states, insights |\\n| **T5** | Strategic documents | \\\"Company vision states...\\\" | Context, desired state |\\n| **T6** | Your synthesis | Patterns identified across sources | Insights only |\\n\\n### 3.2 Evidence Rules\\n\\n| Slide | Minimum Tier | Rationale |\\n|-------|--------------|-----------|\\n| 2.3 (Examples) | T1 only | Must be authentic quotes for scenario design |\\n| 2.4 (Jargon) | T1 only | Must be actual client terminology |\\n| All others | T2-T6 acceptable | Patterns matter, exact words don't |\\n\\n**GROUNDING RULE:** For every bullet you write, you must be able to point to a specific passage in the inputs that supports it. If you cannot identify the source passage, do not include the bullet. Leave the section shorter rather than fabricating content.\\n\\n### 3.3 What You May vs May Not Do\\n\\n**YOU MUST:**\\n- Use ALL available evidence (T1-T6) appropriately\\n- Synthesize patterns into insights (only as many as strong evidence supports)\\n- Push root causes to Level 2-3 depth\\n- Separate learning interventions from organizational requirements\\n\\n**YOU MAY NOT:**\\n- Invent statistics, quotes, demographics not in inputs\\n- Assume business context, culture, values not stated\\n- Fill gaps with generic consultant-speak\\n- Pad sections with unsupported content. Use all available T2-T4 evidence, but if a section has only 1-2 weak evidence points, include those and flag the thinness in `gaps` rather than fabricating additional content.\\n\\n### 3.4 Evidence-Strength Language Calibration\\n\\nMatch language confidence to evidence strength:\\n\\n| Evidence Strength | Language Pattern | Example |\\n|---|---|---|\\n| Multiple sources confirm | State directly | \\\"Managers default to execution over delegation\\\" |\\n| Single source, clear statement | Hedge slightly | \\\"Feedback suggests managers tend toward execution over delegation\\\" |\\n| Inferred from limited data | Flag uncertainty | \\\"Early indicators suggest delegation may be a challenge \u2014 needs validation\\\" |\\n| No direct evidence | Do NOT include | Leave out entirely, flag in gaps |\\n\\nNEVER use definitive language (\\\"clearly\\\", \\\"consistently\\\", \\\"across the board\\\") unless 3+ independent sources confirm the pattern.\\n\\n---\\n\\n## 4. OUTPUT FORMAT\\n\\n### 4.1 Structure\\n\\nOutput as **pure JSON** with this structure:\\n\\n```json\\n{\\n  \\\"metadata\\\": {\\n    \\\"project_name\\\": \\\"Project name from inputs\\\",\\n    \\\"client_name\\\": \\\"Client name\\\",\\n    \\\"generated_date\\\": \\\"DD-MM-YYYY\\\",\\n    \\\"total_slides\\\": 12,\\n    \\\"overall_confidence\\\": \\\"High | Medium | Low\\\"\\n  },\\n  \\\"slides\\\": [\\n    {\\n      \\\"slide_id\\\": \\\"1.1\\\",\\n      \\\"template_reference\\\": \\\"9\\\",\\n      \\\"slide_title\\\": \\\"PROJECT OVERVIEW\\\",\\n      \\\"confidence\\\": \\\"High\\\",\\n      \\\"bullets\\\": {\\n        \\\"section_name\\\": [\\\"Bullet 1\\\", \\\"Bullet 2\\\"]\\n      },\\n      \\\"consultant_notes\\\": {\\n        \\\"walkthrough_tip\\\": \\\"One-line key message\\\",\\n        \\\"slide_notes\\\": [\\\"Point 1\\\", \\\"Point 2\\\"],\\n        \\\"gaps\\\": [],\\n        \\\"conflicts\\\": [],\\n        \\\"ambiguity\\\": []\\n      }\\n    },\\n    { \\\"slide_id\\\": \\\"1.2\\\", \\\"...\\\" : \\\"...\\\" },\\n    { \\\"slide_id\\\": \\\"1.3\\\", \\\"...\\\" : \\\"...\\\" }\\n  ]\\n}\\n```\\n**Structure Rule:** The \\\"slides\\\" key MUST be a JSON array of slide objects (NOT a keyed object). Each slide has a \\\"slide_id\\\" field. Top-level metadata stays outside. Do not flatten slides to root level.\\n\\n### 4.2 Field Definitions\\n\\n| Field | Source | Description |\\n|-------|--------|-------------|\\n| `slide_id` | Fixed | Slide number (e.g., \\\"1.1\\\") |\\n| `template_reference` | Fixed | Internal template slide number |\\n| `slide_title` | Fixed | Slide name in caps |\\n| `confidence` | Assessed | High / Medium / Low based on evidence quality |\\n| `bullets` | Extracted from inputs | Sectioned object with deck-ready statements |\\n| `consultant_notes` | Mixed | Delivery intelligence for consultant |\\n\\n### 4.3 Bullets Rules\\n\\nBullets are **deck-ready** \u2014 copy-paste into presentation.\\n\\n| Don't Write | Do Write |\\n|-------------|----------|\\n| \\\"As noted in FGDs, managers struggle with...\\\" | \\\"Managers default to execution over delegation\\\" |\\n| \\\"Leadership interview revealed that...\\\" | \\\"Strategic thinking expected but not practiced\\\" |\\n| \\\"Based on gap analysis findings...\\\" | \\\"Decision-making bottlenecked at senior levels\\\" |\\n| \\\"Strategic alignment needs improvement across functions\\\" | \\\"Quality and Engineering are pulling in different directions on customer specs \u2014 neither side sees the other's constraints\\\" |\\n| \\\"Leadership development gap identified in mid-level cohort\\\" | \\\"These managers were promoted for being great individual contributors, but nobody taught them how to lead a team\\\" |\\n\\n**No attribution. No citations. No meta-language about sources. Clean statements only.**\\n\\n**Specificity test:** For every bullet, ask: if you removed the client name, could this sentence appear in any other company's deck? If yes, rewrite with THIS client's specific context, examples, and language.\\n\\n### 4.4 consultant_notes Structure\\n\\n| Field | Source | Purpose |\\n|-------|--------|---------|\\n| `walkthrough_tip` | Derived | One-line key message for this slide |\\n| `slide_notes` | **AI-generated** | Max 5 presentation strategy points |\\n| `gaps` | Identified | What's missing from inputs |\\n| `conflicts` | Identified | What contradicts between sources |\\n| `ambiguity` | Identified | What's unclear or needs validation |\\n\\n**Rule:** If confidence is High and no issues exist, `gaps`, `conflicts`, `ambiguity` can be empty arrays.\\n\\n### 4.5 VOICE & TONE\\n\\nWrite as a senior consultant briefing a colleague, not as an AI generating content.\\n\\n| AI-Generated (Avoid) | Natural Consultant Voice (Use) |\\n|---|---|\\n| \\\"Managers default to execution over delegation\\\" | \\\"Most managers are still doing the work themselves rather than building their team's capability to deliver\\\" |\\n| \\\"Cross-functional collaboration remains suboptimal\\\" | \\\"Teams are working in silos \u2014 when Quality flags an issue, Engineering treats it as an interruption rather than a shared problem\\\" |\\n| \\\"Decision-making bottlenecked at senior levels\\\" | \\\"Routine decisions are getting stuck because people wait for their manager's nod instead of using their own judgment\\\" |\\n| \\\"Strategic thinking expected but not practiced\\\" | \\\"Everyone agrees strategic thinking matters, but in practice, the day-to-day firefighting wins every time\\\" |\\n\\n**Voice principles:**\\n- Use concrete, specific language grounded in the client's reality \u2014 not abstract patterns\\n- Write the way you'd explain it to a smart colleague over coffee\\n- Prefer active voice and specific actors (\\\"managers\\\", \\\"the QA team\\\") over passive constructions (\\\"it was observed that...\\\")\\n- If a bullet could apply to any company, it's too generic \u2014 make it specific to THIS client\\n- Avoid consultant jargon: \\\"suboptimal\\\", \\\"leverage\\\", \\\"synergies\\\", \\\"drive alignment\\\"\\n- Use plain language: \\\"not working well\\\", \\\"use\\\", \\\"working together\\\", \\\"get on the same page\\\"\\n\\n---\\n\\n## 5. slide_notes GENERATION\\n\\nThis is where AI adds consulting intelligence. Generate based on slide type:\\n\\n**Narrative voice for slide_notes:**\\n- Write as if coaching a junior consultant: direct, practical, specific\\n- Use the client's own language and terminology from the inputs\\n- Reference specific scenarios from the FGDs, not abstract patterns\\n- \\\"If the CHRO asks about timeline...\\\" not \\\"Stakeholder may inquire regarding...\\\"\\n\\n### Context Slides (1.1, 1.2, 1.3)\\nFocus on: Alignment, expectation-setting, client psychology\\n\\n| Consider | Examples |\\n|----------|----------|\\n| Alignment moments | \\\"Pause after themes \u2014 confirm client sees these as priorities\\\" |\\n| Expectation setting | \\\"This frames scope \u2014 refer back if client expands asks later\\\" |\\n| Client psychology | \\\"New CHRO may want quick wins \u2014 acknowledge timeline sensitivity\\\" |\\n| What could go wrong | \\\"Client may feel participant count is too small for investment\\\" |\\n| Must-say / Avoid-saying | \\\"Use 'evolution' not 'gaps' when describing current state\\\" |\\n\\n### Evidence Slides (2.1, 2.2, 2.3, 2.4, 2.5)\\nFocus on: Defending sources, handling pushback, managing sensitivity\\n\\n| Consider | Examples |\\n|----------|----------|\\n| Source defensibility | \\\"If challenged on escalation data, reference 3 separate FGD groups\\\" |\\n| Sensitivity management | \\\"Raw feedback may feel harsh \u2014 frame as 'participant voice we must honor'\\\" |\\n| Pushback anticipation | \\\"Leadership may dispute current state \u2014 have specific quotes ready\\\" |\\n| What could go wrong | \\\"Client may recognize specific situations \u2014 maintain confidentiality framing\\\" |\\n| Must-say / Avoid-saying | \\\"Say 'patterns observed' not 'problems identified'\\\" |\\n\\n### Insight Slides (3.1, 3.2, 3.3, 3.4)\\nFocus on: Narrative arc, managing defensiveness, landing implications, scope boundaries\\n\\n| Consider | Examples |\\n|----------|----------|\\n| Narrative flow | \\\"This insight sets up Theme 2 \u2014 create the 'aha' before proposing solution\\\" |\\n| Defensiveness risk | \\\"Root cause implicates promotion practices \u2014 frame as 'opportunity' not 'failure'\\\" |\\n| Landing implications | \\\"Pause after org requirements \u2014 this is where budget conversations start\\\" |\\n| Scope boundaries | \\\"Preempt 'can training fix this?' by stating learning boundaries first\\\" |\\n| Must-say / Avoid-saying | \\\"Acknowledge complexity before simplifying into themes\\\" |\\n\\n**Max 5 points per slide. Prioritize by impact. Direct, actionable language.**\\n\\n---\\n\\n## 6. SLIDE SPECIFICATIONS\\n\\n### GROUP 1: CONTEXT\\n\\n---\\n\\n#### SLIDE 1.1: PROJECT OVERVIEW\\n**Template Reference:** 9\\n\\n**Bullets Sections:**\\n- `target_audience`: Who (role, level, count, experience, location)\\n- `background`: Business need, context, why now\\n- `key_themes`: 4-6 themes (must match Slide 3.3)\\n\\n**Confidence Drivers:** Approach note clarity, participant profile completeness\\n\\n---\\n\\n#### SLIDE 1.2: COMPANY PROFILE\\n**Template Reference:** 14\\n\\n**Bullets Sections:**\\n- `industry`: Primary industry/sub-sector\\n- `business_overview`: Scale, services, market position\\n- `geographic_presence`: Regions/countries\\n- `strategic_focus`: Focus areas (if available)\\n- `organization_values`: Values (if documented)\\n\\n**Note:** Internal reference slide, not always shared with client.\\n\\n---\\n\\n#### SLIDE 1.3: PARTICIPANT PROFILE\\n**Template Reference:** [Specify]\\n\\n**Bullets Sections:**\\n- `total_nominated`: Exact count\\n- `seniority_level`: Level breakdown with percentages\\n- `experience_range`: Years range\\n- `functions_represented`: Functions with counts\\n- `geographic_distribution`: Locations\\n\\n**Confidence Drivers:** Specificity of participant data in project details\\n\\n**Critical Rule:** This slide describes the PROGRAM PARTICIPANTS (people who will go through the development program), NOT the people who spoke in FGDs/interviews. Meeting speakers (HR leaders, senior stakeholders, FGD facilitators) are often NOT participants. Only use participant data from <project_details> for counts, levels, and demographics. Use <project_summary> only for qualitative descriptions of the target audience.\\n\\n---\\n\\n### GROUP 2: EVIDENCE\\n\\n---\\n\\n#### SLIDE 2.1: CHALLENGES HEARD\\n**Template Reference:** 34\\n\\n**Bullets Sections:**\\n- `[competency_name]_participant_challenges`: What participants said\\n- `[competency_name]_manager_leader_inputs`: What managers/leaders observed\\n\\nRepeat structure for each competency in scope.\\n\\n**Evidence Tier:** T2-T4 acceptable\\n\\n---\\n\\n#### SLIDE 2.2: CURRENT VS DESIRED STATE\\n**Template Reference:** 35\\n\\n**Bullets Sections:**\\n- `[competency_name]_current_state`: Observable behaviors today\\n- `[competency_name]_desired_state`: Target behaviors\\n\\nRepeat for each competency. Use concrete, behavioral language.\\n\\n**Evidence Tier:** T2-T5 acceptable\\n\\n---\\n\\n#### SLIDE 2.3: CAPTURED EXAMPLES (VERBATIM)\\n**Template Reference:** 42\\n\\n**Bullets Sections:**\\n- `participant_examples`: Verbatim/near-verbatim from participant FGDs\\n- `manager_examples`: Verbatim from manager FGDs\\n- `leadership_examples`: Verbatim from leadership interviews\\n\\n**Evidence Tier:** T1 ONLY\\n\\n**Special Rules:**\\n- Lightly clean for grammar, preserve original meaning\\n- No attribution in bullets (attribution is implicit in section name)\\n- If T1 evidence unavailable, populate with empty array and flag in `gaps`\\n- Add `source_quality` field in consultant_notes indicating fidelity level\\n- If fewer than 2 genuine quotes exist for a section, use fewer bullets and flag in gaps. NEVER invent quotes to fill the section.\\n\\n**Example:**\\n```json\\n\\\"bullets\\\": {\\n  \\\"participant_examples\\\": [\\n    \\\"[Verbatim or near-verbatim quote from participant FGD transcripts]\\\",\\n    \\\"[Another direct quote \u2014 must exist in project_summary input]\\\"\\n  ],\\n  \\\"manager_examples\\\": [\\n    \\\"[Direct quote from manager FGD \u2014 must be traceable to input text]\\\"\\n  ],\\n  \\\"leadership_examples\\\": [\\n    \\\"[Direct quote from leadership interview \u2014 must be traceable to input text]\\\"\\n  ]\\n},\\n\\\"consultant_notes\\\": {\\n  \\\"source_quality\\\": \\\"Mix of verbatim and near-verbatim from FGDs\\\"\\n}\\n```\\n\\n---\\n\\n#### SLIDE 2.4: CAPTURED JARGON\\n**Template Reference:** 43\\n\\n**Bullets Sections:**\\n- `organizational_terms`: Company-specific acronyms, process names\\n- `role_terms`: Title-specific language\\n- `industry_terms`: Domain terminology\\n\\n**Evidence Tier:** T1 ONLY\\n\\n**Format:** \\\"TERM = Definition (one sentence max)\\\"\\n\\n---\\n\\n#### SLIDE 2.5: OUT OF SCOPE ISSUES\\n**Template Reference:** 36\\n\\n**Bullets Sections:**\\n- `process_issues`: With intervention type needed\\n- `system_issues`: With intervention type needed\\n- `behavior_issues`: With intervention type needed\\n\\n**Format:** \\\"Issue description *(Requires: intervention type)*\\\"\\n\\n---\\n\\n### GROUP 3: INSIGHTS\\n\\n---\\n\\n#### SLIDE 3.1: OUR INSIGHTS\\n**Template Reference:** 19\\n\\n**Bullets Sections (per insight):**\\n- `insight_[n]_title`: Clear insight name\\n- `insight_[n]_pattern`: What was observed (3-5 evidence points)\\n- `insight_[n]_root_cause`: Why it happens (Level 2-3 depth, 2-3 sentences)\\n- `insight_[n]_learning_implications`: What development must address\\n- `insight_[n]_org_requirements`: What organization must do\\n\\nGenerate **only as many insights as strong evidence supports**. 2-3 well-grounded insights are better than 6 that stretch the evidence. Never pad with generic insights.\\n\\n**Root Cause Depth:**\\n- Level 1 (symptom): \\\"Managers don't delegate\\\"\\n- Level 2 (first why): \\\"Promoted for technical skills, not leadership\\\"\\n- Level 3 (second why): \\\"Organization rewarded individual heroics; promotion criteria never evolved\\\"\\n\\n---\\n\\n#### SLIDE 3.2: BEHAVIORAL THEMES FOR ASSESSMENT\\n**Template Reference:** 27\\n\\n**Bullets Sections:**\\n- `most_common`: Mentioned in 70% or more of conversations\\n- `medium_frequency`: Mentioned in 40-70%\\n- `strategically_important`: Less than 40% but critical to strategy\\n\\n**Note:** Generate only if Assessment Center is in scope. If not in scope, return slide with note in `gaps`: \\\"Assessment Center not in current scope\\\"\\n\\n---\\n\\n#### SLIDE 3.3: THEMES FOR DEVELOPMENT\\n**Template Reference:** 20\\n\\n**Bullets Sections:**\\n- `theme_[n]_name`: Theme title (MUST match Slide 1.1)\\n- `theme_[n]_subtopics`: Application-focused modules (what participants will DO)\\n- `sequencing_logic`: Why this order\\n- `pedagogical_approach`: How Kolb/Adult Learning applies\\n\\n---\\n\\n#### SLIDE 3.4: ADDITIONAL INSIGHTS (OUT OF SCOPE)\\n**Template Reference:** 25\\n\\n**Bullets Sections:**\\n- `process_improvements`: With owner/action needed\\n- `culture_leadership_actions`: With specific behavior change needed\\n- `recommendations`: Parallel initiatives, leadership engagement, post-programme\\n\\n---\\n\\n## 7. HANDLING ISSUES\\n\\n### Missing Data\\n- Generate what you CAN with available evidence\\n- Flag EXACTLY what's missing in `gaps`\\n- Never invent to fill gaps\\n\\n### Contradictions\\n- Show BOTH perspectives in relevant bullets\\n- Flag in `conflicts` with specific resolution question\\n- Example: \\\"Leadership wants strategic thinking; participants need foundational execution skills first. Resolution needed: sequence or parallel?\\\"\\n\\n### Ambiguity\\n- Flag in `ambiguity` what needs client validation\\n- Proceed with reasonable interpretation, mark confidence as Medium\\n\\n---\\n\\n## 8. ANTI-PATTERNS (DO NOT DO THESE)\\n\\n**Empty Deliverable**\\n```json\\n\\\"bullets\\\": { \\\"challenges\\\": [] },\\n\\\"gaps\\\": [\\\"No FGD data available\\\"]\\n```\\n*Why wrong: Gap Analysis exists but wasn't used.*\\n\\n**Refusing to Synthesize**\\n```json\\n\\\"insight_3_title\\\": \\\"Cannot generate without participant inputs\\\"\\n```\\n*Why wrong: T2-T4 observations exist for synthesis.*\\n\\n**Shallow Root Cause**\\n```json\\n\\\"insight_1_root_cause\\\": \\\"Managers don't delegate because they're busy\\\"\\n```\\n*Why wrong: Level 1 only. No insight into WHY.*\\n\\n**Generic Consultant-Speak**\\n```json\\n\\\"learning_implications\\\": [\\\"Develop growth mindset\\\", \\\"Build leadership capabilities\\\"]\\n```\\n*Why wrong: Could apply to any client. Not specific.*\\n\\n**Attribution in Bullets**\\n```json\\n\\\"bullets\\\": [\\\"As noted in FGDs, managers struggle with delegation\\\"]\\n```\\n*Why wrong: Bullets must be deck-ready. No meta-language.*\\n\\n**Fabricated Content**\\n```json\\n\\\"bullets\\\": [\\\"72% of managers reported difficulty with delegation\\\"]\\n```\\n*Why wrong: No such statistic exists in the inputs. Numbers were invented.*\\n\\n---\\n\\n## 9. CROSS-SLIDE CONSISTENCY\\n\\nBefore outputting, verify:\\n\\n- [ ] Terminology identical across slides (participant descriptors, competency names)\\n- [ ] Themes in 1.1 = Themes in 3.3 (exact match)\\n- [ ] Insights in 3.1 link to themes in 3.3\\n- [ ] Evidence in Group 2 supports insights in Group 3\\n- [ ] Jargon from 2.4 used consistently throughout\\n- [ ] ONE organization identity throughout \u2014 no splitting a single client into multiple entities\\n- [ ] Participant profile (1.3) describes program PARTICIPANTS only, not meeting speakers\\n- [ ] Slide 2.3 quotes are all traceable to <project_summary> input text \u2014 no fabricated examples\\n- [ ] Evidence-strength language matches actual source count (no \\\"consistently\\\" from single source)\\n\\n---\\n\\n## 10. GENERATION SEQUENCE\\n\\n1. **Parse inputs** \u2014 Catalog evidence by tier\\n2. **Lock terminology** \u2014 Participant descriptors, competency names\\n3. **Generate Group 1** \u2014 Context slides (1.1 -> 1.2 -> 1.3)\\n4. **Generate Group 2** \u2014 Evidence slides (2.1 -> 2.2 -> 2.3 -> 2.4 -> 2.5)\\n5. **Generate Group 3** \u2014 Insight slides (3.1 -> 3.2 -> 3.3 -> 3.4)\\n6. **Consistency check** \u2014 Verify terminology, theme matching, evidence flow\\n6.5. **Fabrication check** \u2014 For EVERY bullet and quote:\\n  a. Can you point to a specific passage in <project_summary> or <project_details> that supports this?\\n  b. Does the bullet describe the correct people? (speakers vs participants vs leadership)\\n  c. Is the organization referred to consistently as ONE entity?\\n  d. For Slide 2.3 specifically: is every quote a direct/near-direct quote from the input, not a paraphrase or composite?\\n  e. Common fabrication patterns to catch: inventing percentage breakdowns, adding industry benchmarks, creating quotes that \\\"sound like\\\" what participants would say, splitting one organization into multiple entities, listing meeting speakers as program participants.\\n  Remove any bullet that fails these checks. A shorter, accurate section is always better than a padded, fabricated one.\\n7. **Generate slide_notes** \u2014 AI consulting intelligence per slide type\\n8. **Output JSON**\\n\\n---\\n\\n## 11. SUCCESS CRITERIA\\n\\n**Your output succeeds when:**\\n- POD Owner can walk through with <10% editing\\n- Every claim traces to inputs (epistemic purity)\\n- Insights have Level 2-3 root causes (as many as evidence supports)\\n- Terminology consistent across all slides\\n- Themes match between 1.1 and 3.3\\n- slide_notes provide actionable presentation strategy\\n- Gaps/conflicts flagged clearly, not hidden\\n- Language sounds like a senior consultant, not an AI\\n\\n**Your output fails when:**\\n- Bullets contain attribution language\\n- Insights have shallow (Level 1) root causes\\n- Generic consultant-speak instead of client-specific content\\n- Inconsistent terminology across slides\\n- Content includes facts, statistics, or quotes not found in inputs\\n- Bullets could appear in any company's deck without modification\\n- Language uses jargon like \\\"suboptimal\\\", \\\"leverage\\\", \\\"synergies\\\"\\n\\n---\\n\\n# OUTPUT FORMAT REMINDER\\n\\nValid JSON with two keys:\\n```json\\n{\\n  \\\"metadata\\\": { \\\"project_name\\\": \\\"<project-name>\\\", \\\"client_name\\\": \\\"<client-name>\\\"...},\\n  \\\"slides\\\": [...]\\n}\\n```\\n\\nNo markdown fences. No explanatory text. Just JSON.\\n\\n---\\n\\n\\n## INPUTS\\n\";\n\n// Always add project details and project memory\nprompt += '\\n\\n# Project Details\\n<project_details>';\nprompt += webhook.project_details || '';\nprompt += '</project_details>\\n\\n';\n\nprompt += '\\n\\n# Project Summary\\n<project_summary>';\nprompt += webhook.current_project_memory || '';\nprompt += '</project_summary>\\n\\n';\n\n// Add documents if they were extracted\ntry {\n  const collectNode = $('2.4_JS_CollectDocs');\n  if (collectNode && collectNode.first()) {\n    const docs = collectNode.first().json.extracted_documents;\n    if (docs && docs.length > 0) {\n      prompt += '# Extra documents to refer\\n\\n<project_documents>';\n      docs.forEach(doc => {\n        prompt += '<document>' + doc + '</document>\\n\\n';\n      });\n      prompt += '</project_documents>\\n';\n    }\n  }\n} catch (e) {\n  // No documents path \u2014 skip\n}\n\nreturn [{\n  json: {\n    prompt: prompt,\n    model: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',\n    node_name: 'PreWorkSummary',\n    client_id: webhook.client_id,\n    project_id: webhook.project_id,\n    workflow_session_id: webhook.workflow_session_id,\n    workflow_id: webhook.workflow_id,\n    workflow_name: webhook.workflow_name,\n    workflow_session_name: webhook.workflow_session_name,\n    client_name: webhook.client_name,\n    project_name: webhook.project_name,\n    google_drive_folder_id: webhook.google_drive_folder_id\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -256,
+        0
+      ],
+      "id": "fmt-build-prompt-001",
+      "name": "3.2_FMT_BuildPrompt",
+      "notes": "Assemble full prompt: template + project_details + project_memory + extracted documents (if any)"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "GDaWNcJJtLdY8Q6Y4Yv5p"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        -32,
+        0
+      ],
+      "id": "sub-call-llm-001",
+      "name": "4.1_SUB_CallLLM",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput",
+      "notes": "Call LLM sub-workflow with assembled prompt. Output 0 = success, Output 1 = error"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "llm-error-001",
+              "leftValue": "={{ $json.body_error }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        192,
+        0
+      ],
+      "id": "if-llm-error-001",
+      "name": "5.1_IF_LLMError",
+      "notes": "Check if LLM response contains body_error field (indicates API error)"
+    },
+    {
+      "parameters": {
+        "jsCode": "function jsonToSlideDocText(data) {\n  if (!data || typeof data !== \"object\") throw new Error(\"Expected an object as input.\");\n\n  const metadata = data.metadata || {};\n  const rawSlides = data.slides || [];\n  const slidesObj = Array.isArray(rawSlides)\n    ? rawSlides.reduce((acc, s) => { acc[\"slide_\" + String(s.slide_id || \"\").replace(\".\", \"_\")] = s; return acc; }, {})\n    : rawSlides;\n\n  const lines = [];\n\n  // ---------- Helpers ----------\n  const titleCaseFromKey = (key) =>\n    String(key)\n      .replace(/_/g, \" \")\n      .replace(/\\s+/g, \" \")\n      .trim()\n      .replace(/\\b\\w/g, (c) => c.toUpperCase());\n\n  const isNonEmptyString = (v) => typeof v === \"string\" && v.trim().length > 0;\n  const isNonEmptyArray = (v) => Array.isArray(v) && v.length > 0;\n\n  const parseSlideId = (id) => {\n    const raw = String(id ?? \"\").trim();\n    if (!raw) return { major: Number.MAX_SAFE_INTEGER, minor: Number.MAX_SAFE_INTEGER, raw: \"\" };\n\n    const parts = raw.split(\".\").map((p) => p.trim());\n    const major = Number(parts[0]);\n    const minor = parts.length > 1 ? Number(parts[1]) : 0;\n\n    return {\n      major: Number.isFinite(major) ? major : Number.MAX_SAFE_INTEGER,\n      minor: Number.isFinite(minor) ? minor : Number.MAX_SAFE_INTEGER,\n      raw,\n    };\n  };\n\n  const compareSlide = (a, b) => {\n    const pa = parseSlideId(a.slide_id);\n    const pb = parseSlideId(b.slide_id);\n    if (pa.major !== pb.major) return pa.major - pb.major;\n    if (pa.minor !== pb.minor) return pa.minor - pb.minor;\n    return String(pa.raw).localeCompare(String(pb.raw));\n  };\n\n  const hr = () => lines.push(\"\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\");\n\n  const h0 = (t) => {\n    lines.push(String(t));\n    lines.push(\"=\".repeat(Math.max(8, String(t).length)));\n  };\n\n  const h1 = (t) => {\n    lines.push(String(t));\n    lines.push(\"-\".repeat(Math.max(6, String(t).length)));\n  };\n\n  const h2 = (t) => {\n    lines.push(String(t).toUpperCase());\n  };\n\n  const addBlank = () => lines.push(\"\");\n\n  const renderList = (items, indent = \"\") => {\n    return items.map((x) => `${indent}\u2022 ${String(x)}`);\n  };\n\n  const renderAnyValueAsList = (value) => {\n    if (isNonEmptyArray(value)) return value.map((x) => String(x));\n    if (isNonEmptyString(value)) return [value.trim()];\n    if (value && typeof value === \"object\") {\n      const out = [];\n      for (const [k, v] of Object.entries(value)) {\n        if (isNonEmptyArray(v)) out.push(`${titleCaseFromKey(k)}: ${v.join(\"; \")}`);\n        else if (isNonEmptyString(v)) out.push(`${titleCaseFromKey(k)}: ${v.trim()}`);\n      }\n      return out;\n    }\n    return [];\n  };\n\n  // ---------- Deck Title ----------\n  const deckTitle = isNonEmptyString(metadata.project_name)\n    ? metadata.project_name.trim()\n    : \"SLIDE DECK\";\n\n  h0(deckTitle);\n  addBlank();\n\n  // ---------- Cover meta ----------\n  const coverMeta = [];\n  if (isNonEmptyString(metadata.client_name)) coverMeta.push(`Client: ${metadata.client_name.trim()}`);\n  if (isNonEmptyString(metadata.generated_date)) coverMeta.push(`Generated: ${metadata.generated_date.trim()}`);\n  if (metadata.total_slides != null && String(metadata.total_slides).trim() !== \"\")\n    coverMeta.push(`Total Slides: ${String(metadata.total_slides).trim()}`);\n  if (isNonEmptyString(metadata.overall_confidence))\n    coverMeta.push(`Overall Confidence: ${metadata.overall_confidence.trim()}`);\n\n  if (coverMeta.length) {\n    h1(\"Cover\");\n    lines.push(...renderList(coverMeta));\n    addBlank();\n  }\n\n  if (isNonEmptyString(metadata.generation_notes)) {\n    h1(\"Generation Notes\");\n    lines.push(metadata.generation_notes.trim());\n    addBlank();\n  }\n\n  hr();\n  addBlank();\n\n  // ---------- Slides ----------\n  const slides = Object.values(slidesObj).filter((s) => s && typeof s === \"object\").sort(compareSlide);\n\n  const grouped = new Map();\n  for (const s of slides) {\n    const { major } = parseSlideId(s.slide_id);\n    if (!grouped.has(major)) grouped.set(major, []);\n    grouped.get(major).push(s);\n  }\n\n  const sectionTitle = (major) => `SECTION ${major}`;\n\n  for (const [major, sectionSlides] of grouped.entries()) {\n    h0(sectionTitle(major));\n    addBlank();\n\n    sectionSlides.forEach((slide) => {\n      const sid = String(slide.slide_id ?? \"\").trim();\n      const title = String(slide.slide_title ?? `Slide ${sid || \"\"}`).trim();\n      const templateRef = slide.template_reference ? String(slide.template_reference).trim() : \"\";\n      const conf = slide.confidence ? String(slide.confidence).trim() : \"\";\n\n      h1(`Slide ${sid} \u2014 ${title}`);\n      if (templateRef || conf) {\n        const metaBits = [];\n        if (templateRef) metaBits.push(`Template ${templateRef}`);\n        if (conf) metaBits.push(`Confidence: ${conf}`);\n        lines.push(metaBits.join(\" | \"));\n        addBlank();\n      }\n\n      const bullets = slide.bullets || {};\n      if (bullets && typeof bullets === \"object\") {\n        for (const [k, v] of Object.entries(bullets)) {\n          const list = renderAnyValueAsList(v);\n          if (!list.length) continue;\n\n          h2(titleCaseFromKey(k));\n          lines.push(...renderList(list));\n          addBlank();\n        }\n      }\n\n      const notes = slide.consultant_notes || {};\n      const hasNotes =\n        (notes && typeof notes === \"object\" && Object.keys(notes).length > 0) ||\n        isNonEmptyString(notes?.walkthrough_tip);\n\n      if (hasNotes) {\n        const noteBlocks = [];\n\n        if (isNonEmptyString(notes.walkthrough_tip)) {\n          noteBlocks.push({ label: \"Walkthrough Tip\", items: [notes.walkthrough_tip.trim()] });\n        }\n\n        const arrays = [\n          [\"Slide Notes\", notes.slide_notes],\n          [\"Gaps / Open Questions\", notes.gaps],\n          [\"Conflicts\", notes.conflicts],\n          [\"Ambiguity\", notes.ambiguity],\n        ];\n\n        for (const [label, val] of arrays) {\n          const list = renderAnyValueAsList(val);\n          if (list.length) noteBlocks.push({ label, items: list });\n        }\n\n        if (noteBlocks.length) {\n          h2(\"Presenter Notes\");\n          for (const block of noteBlocks) {\n            lines.push(`${block.label}:`);\n            lines.push(...renderList(block.items, \"  \"));\n          }\n          addBlank();\n        }\n      }\n\n      hr();\n      addBlank();\n    });\n  }\n\n  return lines.join(\"\\n\");\n}\n\n// Main logic \u2014 LLM sub-workflow returns { llm_response: <parsed JSON object> }\n// The sub-workflow's \"Parse JSON Response\" already handles JSON extraction and repair.\nconst webhook = $('1.1_TRG_Webhook').first().json.body;\nconst jsonData = $input.first().json.llm_response;\n\nif (!jsonData || typeof jsonData !== 'object') {\n  return [{\n    \"status\": \"error\",\n    \"error_message\": \"No valid LLM response received. Expected llm_response object.\",\n    \"client_id\": webhook.client_id,\n    \"client_name\": webhook.client_name,\n    \"project_id\": webhook.project_id,\n    \"project_name\": webhook.project_name,\n    \"workflow_id\": webhook.workflow_id,\n    \"workflow_name\": webhook.workflow_name,\n    \"workflow_session_id\": webhook.workflow_session_id,\n    \"workflow_session_name\": webhook.workflow_session_name\n  }];\n}\n\ntry {\n  var content = jsonToSlideDocText(jsonData);\n\n  return [{\n    \"status\": \"processed\",\n    \"agent_response\": (function() {\n      const slides = jsonData.slides;\n      const keyedSlides = Array.isArray(slides)\n        ? slides.reduce((acc, s) => { acc[\"slide_\" + String(s.slide_id || \"\").replace(\".\", \"_\")] = s; return acc; }, {})\n        : slides;\n      return { metadata: jsonData.metadata, slides: keyedSlides };\n    })(),\n    \"content\": content,\n    \"google_drive_folder_id\": webhook.google_drive_folder_id,\n    \"client_id\": webhook.client_id,\n    \"client_name\": webhook.client_name,\n    \"project_id\": webhook.project_id,\n    \"project_name\": webhook.project_name,\n    \"workflow_id\": webhook.workflow_id,\n    \"workflow_name\": webhook.workflow_name,\n    \"workflow_session_id\": webhook.workflow_session_id,\n    \"workflow_session_name\": webhook.workflow_session_name\n  }];\n\n} catch(renderError) {\n  return [{\n    \"status\": \"error\",\n    \"error_message\": \"Rendering failed: \" + renderError.message,\n    \"agent_response\": jsonData,\n    \"client_id\": webhook.client_id,\n    \"client_name\": webhook.client_name,\n    \"project_id\": webhook.project_id,\n    \"project_name\": webhook.project_name,\n    \"workflow_id\": webhook.workflow_id,\n    \"workflow_name\": webhook.workflow_name,\n    \"workflow_session_id\": webhook.workflow_session_id,\n    \"workflow_session_name\": webhook.workflow_session_name\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        96
+      ],
+      "id": "js-parse-render-001",
+      "name": "5.2_JS_ParseAndRender",
+      "notes": "Parse JSON from LLM response, render slides to text for Google Doc. Includes robust JSON repair."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "parse-error-001",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "error",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        640,
+        96
+      ],
+      "id": "if-parse-error-001",
+      "name": "5.3_IF_ParseError",
+      "notes": "Check if JSON parsing/rendering failed (status === \"error\")"
+    },
+    {
+      "parameters": {
+        "driveId": "sharedWithMe",
+        "folderId": "={{ $json.google_drive_folder_id }}",
+        "title": "={{ $json.workflow_session_name }}_{{ (new Date()).getTime() }}"
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        864,
+        192
+      ],
+      "id": "gdoc-create-001",
+      "name": "6.1_GDOC_Create",
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "8Se5WgPUVSkK9BjF",
+          "name": "Test User Google Docs Account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Create a new Google Doc in the project Google Drive folder"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentURL": "={{ $json.id }}",
+        "simple": "={{ true }}",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "insert",
+              "text": "={{ $('5.2_JS_ParseAndRender').item.json.content }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        1088,
+        192
+      ],
+      "id": "gdoc-update-001",
+      "name": "6.2_GDOC_Update",
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "8Se5WgPUVSkK9BjF",
+          "name": "Test User Google Docs Account"
+        }
+      },
+      "notes": "Insert rendered slide content into the Google Doc"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://coreapi.ur-nl.com/workflow_sessions/{{ $('5.2_JS_ParseAndRender').item.json.workflow_session_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Subdomain",
+              "value": "dashboard"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={\n  \"workflow_session\": {\n    \"output_file_url\": \"https://docs.google.com/document/d/{{ $json.documentId }}\",\n    \"output_json\": {{ JSON.stringify($('5.2_JS_ParseAndRender').item.json.agent_response) }},\n    \"status\": \"completed\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1312,
+        192
+      ],
+      "id": "api-success-001",
+      "name": "7.1_API_ReportSuccess",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "9fZP8bOKRNJtilO1",
+          "name": "Jombay Staging API"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Report success to coreapi with output_file_url and output_json"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Centralized error formatter\nconst input = $input.first().json;\n\nfunction safeErrorExtract(error) {\n  if (!error) return null;\n  if (error instanceof Error || error.message) {\n    return {\n      message: error.message || 'Unknown error',\n      name: error.name,\n      stack: error.stack,\n      ...Object.keys(error).reduce((acc, key) => {\n        try { acc[key] = error[key]; } catch (e) {}\n        return acc;\n      }, {})\n    };\n  }\n  return error;\n}\n\nconst errorInfo = safeErrorExtract(input);\n\nreturn [{\n  json: {\n    status: 'error',\n    error_message: errorInfo?.message || input?.error_message || input?.body_error || 'Workflow execution failed',\n    workflow_session_id: $('1.1_TRG_Webhook').first().json.body.workflow_session_id,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        -200
+      ],
+      "id": "err-format-001",
+      "name": "8.1_ERR_Format",
+      "notes": "Centralized error formatter \u2014 all error paths converge here"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://coreapi.ur-nl.com/workflow_sessions/{{ $json.workflow_session_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Subdomain",
+              "value": "dashboard"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={   \"workflow_session\": {  \"status\": \"error\", \"error_message\": \"{{ $json.error_message }}\"   } } ",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2624,
+        -200
+      ],
+      "id": "err-api-001",
+      "name": "8.2_API_ReportError",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "9fZP8bOKRNJtilO1",
+          "name": "Jombay Staging API"
+        }
+      },
+      "notes": "Report error to coreapi with error_message and execution details"
+    }
+  ],
+  "connections": {
+    "1.1_TRG_Webhook": {
+      "main": [
+        [
+          {
+            "node": "2.1_IF_HasDocs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2.1_IF_HasDocs": {
+      "main": [
+        [
+          {
+            "node": "2.2_JS_SplitUrls",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "3.2_FMT_BuildPrompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2.2_JS_SplitUrls": {
+      "main": [
+        [
+          {
+            "node": "2.3_SUB_ExtractDoc",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2.3_SUB_ExtractDoc": {
+      "main": [
+        [
+          {
+            "node": "2.4_JS_CollectDocs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2.4_JS_CollectDocs": {
+      "main": [
+        [
+          {
+            "node": "3.2_FMT_BuildPrompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3.2_FMT_BuildPrompt": {
+      "main": [
+        [
+          {
+            "node": "4.1_SUB_CallLLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4.1_SUB_CallLLM": {
+      "main": [
+        [
+          {
+            "node": "5.1_IF_LLMError",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "8.1_ERR_Format",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5.1_IF_LLMError": {
+      "main": [
+        [
+          {
+            "node": "8.1_ERR_Format",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "5.2_JS_ParseAndRender",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5.2_JS_ParseAndRender": {
+      "main": [
+        [
+          {
+            "node": "5.3_IF_ParseError",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5.3_IF_ParseError": {
+      "main": [
+        [
+          {
+            "node": "8.1_ERR_Format",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "6.1_GDOC_Create",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6.1_GDOC_Create": {
+      "main": [
+        [
+          {
+            "node": "6.2_GDOC_Update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "8.1_ERR_Format",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6.2_GDOC_Update": {
+      "main": [
+        [
+          {
+            "node": "7.1_API_ReportSuccess",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "8.1_ERR_Format": {
+      "main": [
+        [
+          {
+            "node": "8.2_API_ReportError",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "workflows.ur-nl.com",
+            "connection": "keep-alive",
+            "x-forwarded-for": "3.108.25.31, 10.0.1.209",
+            "x-forwarded-proto": "https",
+            "x-forwarded-host": "workflows.ur-nl.com",
+            "x-forwarded-port": "443",
+            "x-forwarded-path": "/webhook/f5edc4ba-1bff-409b-ba9c-7603d80d0ea2",
+            "x-real-ip": "3.108.25.31",
+            "x-kong-request-id": "09d87736c9262350a59a9051aa20d54d",
+            "content-length": "22464",
+            "x-amzn-trace-id": "Root=1-6981d68e-7d036ced346290416fdd5177",
+            "accept-encoding": "gzip;q=1.0,deflate;q=0.6,identity;q=0.3",
+            "accept": "*/*",
+            "user-agent": "Ruby",
+            "apikey": "test_jombay_n8n_key",
+            "content-type": "multipart/form-data; boundary=TxmyTlIAMBtfH9gC_cjIFtQtB1iWjCUyvGXD1S5PUqwVlU8WYe0XiQ"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "instructions": "",
+            "google_drive_folder_id": "",
+            "client_id": "697c8c84c3abb61f569165fb",
+            "client_name": "Test Account",
+            "project_id": "697cb1b4fdd167c8d12ed21c",
+            "project_name": "New Project5",
+            "project_details": "{\"project_components\":[],\"seniority_of_cohort\":[],\"cities_locations\":[],\"name\":\"New Project5\",\"description\":\"New Project\",\"background\":null,\"project_notes\":null,\"cohort_size_description_ac\":null,\"cohort_size_description_dj\":null,\"addresses_for_sessions\":null,\"facilitators_name\":null,\"assessors_name\":null,\"practice_type\":\"talent_advisory\",\"project_duration_months\":null,\"start_date\":\"2026-01-30T00:00:00.000Z\"}",
+            "workflow_id": "696494839a010f27656ad184",
+            "workflow_name": "PreWork Summary",
+            "workflow_session_id": "6981d685993e75c030239314",
+            "workflow_session_name": "Test",
+            "current_project_memory": "# Campus-to-Corporate Assessment Solution \u2014 Project Summary\n\n**Client:** Organization hiring 800\u20131,000 fresh graduates annually | **Updated:** Current | **Status:** Discovery Phase\n\n**Key Numbers:** 800\u20131,000 annual new hires | Three assessment dimensions | Multi-stage evaluation capability\n\n## Executive Summary\n\nThe client organization faces consistent readiness gaps among new graduate hires despite strong academic credentials. Current capability gaps center on communication skills, analytical thinking, and professional behavior\u2014technical knowledge is generally sufficient. The organization currently provides internal post-hire training but lacks structured assessments to measure training effectiveness or readiness improvements.\n\nWe are proposing a Campus-to-Corporate assessment platform that evaluates candidates across three dimensions: technical competencies, cognitive abilities, and behavioral competencies. Assessments can be administered at multiple touchpoints: pre-hire (campus/drive), during training, and post-training to track progress over time.\n\n## Needs Your Attention\n\n**Critical Missing Information for Next Steps:**\n- **CQ-001:** Budget/commercial model alignment (see Questions We Need Answered)\n- **CQ-002:** Pilot timeline and scope definition (see Questions We Need Answered)\n- **CQ-003:** Existing system integrations and IT infrastructure (see Questions We Need Answered)\n- **CQ-004:** Decision authority and approval chain (see Questions We Need Answered)\n\n**Prior Context Gap:**\nMeeting notes reference previous discussion between Arjun and Rahul\u2014prior conversation not included in current memory. **Action:** Confirm what was discussed/committed in earlier engagement.\n\n## Program Objectives & Success\n\n**Primary Business Outcomes:**\n- Measure and improve new graduate readiness for corporate environments\n- Quantify training program effectiveness through pre/post assessment comparison\n- Enable data-driven prioritization of training interventions\n- Reduce time-to-productivity for new hires\n\n**Success Criteria:**\n- Individual skill gap identification and remediation tracking\n- Batch-level performance visibility and improvement trends\n- Department-level skill distribution insights\n- Hiring quality metrics and readiness index\n\n**Currently Undefined:**\n- Baseline metrics (current pass/fail rates, time-to-productivity, attrition)\n- Specific improvement thresholds for pilot/rollout go-decision\n- Target adoption rates or engagement metrics\n\n## Scope & Delivery\n\n### Platform Capabilities\n\n**Assessment Dimensions:**\n- Technical competencies\n- Cognitive abilities\n- Behavioral competencies\n\n**Administration & Accessibility:**\n- Primarily online, mobile-friendly interface\n- Can be administered during campus drives or induction programs\n- Interface designed for fresh graduates without prior corporate experience\n- Candidates can complete via laptops or mobile devices\n\n**Customization & Flexibility:**\n- Assessments can be configured per role, department, or batch\n- Difficulty levels and focus areas adjustable by batch\n- Pre-training and post-training assessments to measure program impact\n- **Customization effort, timelines, and costs not yet detailed** (flagged as over-certainty risk)\n\n**Analytics & Insights:**\n- Real-time dashboards showing individual skill gaps, batch performance, and department-level summaries\n- Hiring quality metrics, readiness index, department-level skill distribution\n- Comparative analytics across batches and cohorts\n- Reports showing improvement at individual and group levels\n- Enables prioritization of training interventions based on identified gaps\n- **Data latency, update frequency, and reporting granularity not specified** (flagged as over-certainty risk)\n\n**Security & Integrity:**\n- Question randomization and time restrictions\n- Activity tracking and optional proctoring integrations\n- Designed to prevent cheating and misuse\n\n### What's Not Included (Pending Clarification)\n- Integration scope with existing HR/HRIS/LMS systems (pending client IT infrastructure assessment)\n- Specific training module content or delivery model\n- Client's current training program details\n- Data residency, compliance, or cloud readiness requirements\n\n## Risks & Concerns\n\n**Scope Creep Risk:** Customization commitment stated as \"Absolutely\" without detail on effort or costs. Client may assume zero-effort role/department tailoring. **Mitigation:** Define customization effort/timeline in solution walkthrough.\n\n**Integration Risk:** No discussion of existing assessment or learning management systems, HRIS, or HR data infrastructure. Data silos and rework risk if not mapped early. **Mitigation (CQ-003):** Audit client's HR tech stack before pilot scope definition.\n\n**ROI Attribution Risk:** Post-training improvement tracking presented as straightforward but no discussion of confounding variables (e.g., job experience, role difficulty, external factors). Client may over-interpret causation between training and assessment improvement. **Mitigation:** Define improvement measurement methodology and attribution boundaries during walkthrough.\n\n**Adoption Risk:** No acceptance criteria defined for pilot success or full rollout. Unclear what metrics determine go/no-go transition. **Mitigation (CQ-002):** Establish pilot KPIs (e.g., minimum improvement threshold, adoption rate target) in next meeting.\n\n**Stakeholder Alignment Risk:** IT/Security approval requirements unknown. Client may have data residency, compliance, or vendor security requirements that stall decision. **Mitigation (CQ-004):** Confirm decision authority and IT approval chain early.\n\n## Commitments & Decisions\n\n**What We've Agreed To:**\n- Schedule detailed solution walkthrough session\n- Demonstrate platform capabilities\n- Review customization options\n- Discuss pilot implementation approach\n\n**Participants Confirmed for Next Meeting:**\n- Client leadership\n- IT teams\n- (Names/titles pending)\n\n**Still Under Discussion:**\n- Pilot scope (department, batch size, duration, success criteria)\n- Commercial model and budget range\n- Implementation timeline\n- Integration requirements and data governance\n- Decision authority and approval chain\n\n## Stakeholders & Approvals\n\n**Decision Makers (Role-Based, Names Pending):**\n- Client leadership (approval on program adoption and budget)\n- IT/Security (approval on platform integration, data governance, vendor security)\n\n**Key Stakeholders (Mentioned by First Name):**\n- Arjun (involvement in prior discussion\u2014context pending)\n- Rahul (involvement in prior discussion\u2014context pending)\n- Phriya (solution provider contact, demonstrated platform capabilities)\n\n**Approval Process (Pending Clarification):**\n- Who owns final adoption decision: HR alone or joint HR/IT?\n- Does IT have mandatory compliance/security review before approval?\n- Are there departmental budget approvals required beyond leadership?\n\n## Key Insights\n\n**Current State Challenges:**\n- New graduates have strong academic records but lack corporate readiness\n- Capability gaps center on communication skills, analytical thinking, and professional behavior\n- Technical knowledge is generally sufficient (not primary gap)\n- Current internal training post-hire lacks structured assessment to measure effectiveness or readiness improvements\n- No baseline metrics on current hiring pass/fail rates, time-to-productivity, or attrition\n\n**Organizational Context (Pending Detail):**\n- Client hires 800\u20131,000 fresh graduates annually\n- Organizational structure (departmental breakdown, hiring patterns) not detailed\n- Current training program content, duration, and frequency not discussed\n- HR tech stack and compliance requirements (GDPR/data localization) not yet assessed\n\n## What Changed Recently\n\n- File processed: meeting_notes (Initial Campus-to-Corporate solution discussion)\n- Solution overview: Assessment platform for three competency dimensions, multi-stage evaluation capability\n- Next meeting scheduled for detailed walkthrough with client leadership and IT teams\n- **Critical gaps identified:** Budget model, pilot timeline, existing systems integration, decision authority\u2014all flagged for clarification\n\n## Questions We Need Answered\n\n**CQ-001: Budget & Commercial Model** \u2014 HIGH Priority\n- **Category:** MISSING_INFO\n- **Section:** Commitments & Decisions\n- **Question:** What is the budget range or commercial model for this engagement (licensing, per-user, SaaS)? Does the client prefer annual subscription, per-assessment fee, or enterprise licensing?\n- **Why it matters:** Pricing sensitivity often surfaces late; early alignment prevents scope creep or deal friction. Budget directly affects scope and implementation approach.\n- **What we currently have:** No budget discussion or commercial model mentioned.\n- **What answer should look like:** \"Budget range: $X-$Y per year\" OR \"Per-user licensing: $X per assessment\" OR \"Enterprise SaaS: $X annually including unlimited customization and support\"\n- **AI recommendation:** Clarify commercial model upfront. Establish whether budget includes integration, customization, ongoing support, or if these are add-on fees. [Confidence: HIGH \u2014 standard enterprise software conversation]\n- **Source files:** meeting_notes\n\n**CQ-002: Pilot Timeline & Scope Definition** \u2014 HIGH Priority\n- **Category:** MISSING_INFO\n- **Section:** Commitments & Decisions\n- **Question:** What is the timeline for pilot implementation? (Start date, duration, cohort size, success criteria for pilot transition to full rollout?)\n- **Why it matters:** Without pilot boundaries, scope can expand or timelines slip post-implementation. Clear pilot KPIs ensure objective go/no-go decision.\n- **What we currently have:** \"Pilot implementation discussion\" mentioned as next step, but no specifics on scope, duration, or success criteria.\n- **What answer should look like:** \"Pilot: Q1 2025, 2-week window, single department (200 new hires), success criteria: \u226580% adoption, \u226515% improvement in post-training assessments\"\n- **AI recommendation:** During solution walkthrough, establish: Which department/batch size? 2-4 week pilot window? What metrics (adoption %, skill improvement threshold, user feedback score) determine go/no-go for full rollout? [Confidence: HIGH \u2014 standard pilot definition]\n- **Source files:** meeting_notes\n\n**CQ-003: Existing Systems Integration & IT Infrastructure** \u2014 HIGH Priority\n- **Category:** MISSING_INFO\n- **Section:** Scope & Delivery\n- **Question:** What existing assessment or learning management systems does the client currently use? Any integration requirements? (HRIS, LMS, HR data systems, cloud infrastructure, compliance/data residency requirements?)\n- **Why it matters:** Integration complexity often discovered late; early mapping prevents rework and data silos. IT infrastructure and compliance requirements affect implementation approach and timeline.\n- **What we currently have:** No discussion of current HR tech stack, HRIS, LMS, or compliance requirements (GDPR, data localization).\n- **What answer should look like:** \"We use [LMS name] + [HRIS name]; need integration via API. We're cloud-ready (AWS). Data must reside in India (GDPR not applicable but internal policy).\" OR \"No integrations required, standalone platform acceptable.\"\n- **AI recommendation:** Before solution walkthrough, request: (1) Client's current HR/training systems landscape, (2) Cloud readiness and infrastructure preferences, (3) Any compliance/data residency requirements (GDPR, local data laws, internal policy). Identify integration points and effort upfront. [Confidence: HIGH \u2014 standard IT readiness assessment]\n- **Source files:** meeting_notes\n\n**CQ-004: Decision Authority & Approval Chain** \u2014 HIGH Priority\n- **Category:** MISSING_INFO\n- **Section:** Stakeholders & Approvals\n- **Question:** Who owns the final decision on adoption: HR alone, or does IT/Security need approval? What is the approval chain and timeline?\n- **Why it matters:** Stakeholder alignment accelerates decision-making; absence of IT buy-in risks project stall. Unclear authority causes delays when requirements emerge post-discussion.\n- **What we currently have:** Next meeting includes \"client leadership and IT teams,\" but decision authority not confirmed. Names/titles of decision makers not specified.\n- **What answer should look like:** \"HR Director (Priya Sharma) owns final decision; IT Security (Rajesh Verma) must approve data governance/vendor security; both report to VP People.\" OR \"HR Director has full authority; IT is advisory only.\"\n- **AI recommendation:** In solution walkthrough, confirm: (1) Who signs off on budget/go-decision, (2) Does IT have veto authority or advisory role, (3) Are there mandatory compliance reviews or vendor security assessments, (4) What is approval timeline (days/weeks post-pilot). Identify and engage all decision makers. [Confidence: HIGH \u2014 standard stakeholder mapping]\n- **Source files:** meeting_notes\n\n**CQ-005: Baseline Metrics & ROI Definition** \u2014 MEDIUM Priority\n- **Category:** MISSING_INFO\n- **Section:** Program Objectives & Success\n- **Question:** What are the client's current baseline metrics on new hire readiness? (Current pass/fail rates on assessments, time-to-productivity, attrition in first year, training effectiveness measures?)\n- **Why it matters:** Baseline metrics establish ROI foundation. Without baseline, cannot objectively measure solution impact or justify continued investment.\n- **What we currently have:** Problem described (gaps in communication, analytical thinking, professional behavior) but no quantified baseline (e.g., \"30% of new hires fail communication assessments\" or \"6 months average time-to-productivity\").\n- **What answer should look like:** \"Currently 35% of new hires score below target on communication; average time-to-full-productivity is 5 months; first-year voluntary attrition is 18%.\" OR \"We don't track these metrics currently.\"\n- **AI recommendation:** If baseline not available: Propose baseline-setting phase in pilot (establish current metrics before pilot training begins). If baseline exists: Extract numbers and define improvement targets for pilot success criteria. [Confidence: MEDIUM \u2014 depends on client's HR analytics maturity]\n- **Source files:** meeting_notes\n\n**CQ-006: Customization Effort & Cost** \u2014 MEDIUM Priority\n- **Category:** AMBIGUITY\n- **Section:** Scope & Delivery - Customization & Flexibility\n- **Question:** What is the effort, timeline, and cost for customizing assessments per role/department/batch? Are there standard templates or is all customization bespoke?\n- **Why it matters:** \"Customization is absolutely possible\" (stated affirmatively) without detail on effort or costs. Client may assume zero-effort tailoring; late cost discovery causes deal friction.\n- **What we currently have:** Statement: \"Assessments can be configured per role, department, or batch. Difficulty levels and focus areas adjustable by batch.\" No discussion of customization effort, timelines, or whether costs are included in base licensing.\n- **What answer should look like:** \"Customization included in enterprise license: up to 5 custom role profiles, 2 difficulty levels per department. Additional customization: $X per profile. Turnaround: 2 weeks per profile.\" OR \"All customization is standard template-based, no additional cost.\"\n- **AI recommendation:** In solution walkthrough, clarify: (1) What customization is included in base license, (2) What customization is available as add-on (cost/timeline), (3) Provide 2-3 customization examples (e.g., custom profile for \"Sales Graduate\" vs. \"IT Graduate\") and effort estimates. [Confidence: HIGH \u2014 product feature clarification]\n- **Source files:** meeting_notes\n\n**CQ-007: Data & Reporting Specifications** \u2014 MEDIUM Priority\n- **Category:** AMBIGUITY\n- **Section:** Scope & Delivery - Analytics & Insights\n- **Question:** What is the data latency, update frequency, and reporting granularity for real-time dashboards? (Data refreshed hourly/daily? Drill-down to individual candidate? Report export formats and customization?)\n- **Why it matters:** \"Real-time dashboards\" mentioned but reporting cadence and granularity not defined. Client may have reporting expectations (e.g., live dashboards every hour) that platform cannot meet, or may require specific export formats for their own BI systems.\n- **What we currently have:** \"Real-time dashboards showing individual skill gaps, batch performance, and department-level summaries.\" No specification on data refresh frequency, drill-down capability, or export/integration options.\n- **What answer should look like:** \"Dashboards update every 4 hours. Drill-down available to individual candidate, department, cohort. Reports exportable to CSV/Excel. API available for BI system integration.\" OR \"Real-time means next business day; export to Excel only.\"\n- **AI recommendation:** During demo in next meeting, specify: (1) Actual data update frequency (not just \"real-time\"), (2) Reporting granularity (individual, department, batch, cross-batch comparison?), (3) Standard reports vs. custom report capability, (4) Export formats and BI/HRIS integration options. [Confidence: HIGH \u2014 product capability clarification]\n- **Source files:** meeting_notes\n\n**CQ-008: Causation vs. Correlation in Post-Training Improvements** \u2014 MEDIUM Priority\n- **Category:** AMBIGUITY\n- **Section:** Key Insights\n- **Question:** How does the client plan to isolate training impact from confounding variables (e.g., job experience, role difficulty, external factors) when measuring post-training assessment improvement?\n- **Why it matters:** Improvement tracking presented as straightforward but no discussion of attribution methodology. Client may over-interpret causation (\"training caused skill X improvement\") without accounting for confounds. Late disagreement on ROI attribution damages credibility.\n- **What we currently have:** Statement: \"Reports showing improvement at individual and group levels\" and \"Enables prioritization of training interventions based on identified gaps.\" No discussion of measurement methodology or attribution control (e.g., control group, pre/post experimental design).\n- **What answer should look like:** \"We'll compare pre-training to post-training scores. We understand that improvement may reflect both training and on-job experience. We'll track improvement by department/role to spot patterns. We don't expect 100% training attribution.\" OR \"We need statistical controls (control group) to isolate training impact.\"\n- **AI recommendation:** In solution design phase, clarify: (1) Client's expectations on attributing improvement to training vs. other factors, (2) Whether client wants control group (more rigorous but requires pulling some new hires out of training\u2014usually not feasible), (3) Standard approach: Report pre/post scores, context with job role/tenure/department, qualitative feedback from training teams. Set expectations on what can/cannot be proven. [Confidence: MEDIUM \u2014 depends on client's research rigor expectations]\n- **Source files:** meeting_notes\n\n**CQ-009: Prior Engagement Context \u2014 Arjun & Rahul Discussion** \u2014 MEDIUM Priority\n- **Category:** MISSING_INFO\n- **Section:** Commitments & Decisions\n- **Question:** What was discussed in the prior conversation between Arjun and Rahul? What commitments or context were established?\n- **Why it matters:** Meeting notes reference \"previous discussion between Arjun and Rahul.\" Current memory does not include prior conversation. Gaps in context may affect understanding of client expectations or commitments already made.\n- **What we currently have:** Reference to prior discussion exists; full content unknown.\n- **What answer should look like:** Summary of prior discussion (e.g., \"Arjun and Rahul discussed platform capabilities and budget ballpark of $50K. Rahul committed to next meeting by Jan 15.\") OR \"Share prior meeting notes/transcript.\"\n- **AI recommendation:** Obtain full context from Arjun/Rahul before next client meeting. Ensure current team understands prior scope and commitments to avoid contradictions. [Confidence: HIGH \u2014 factual retrieval]\n- **Source files:** meeting_notes (reference only; full content pending)\n",
+            "documents_urls": ""
+          },
+          "webhookUrl": "https://workflows.ur-nl.com/webhook/f5edc4ba-1bff-409b-ba9c-7603d80d0ea2",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "versionId": "301bae70-391b-4364-a15f-7f3b5256dcf3",
+  "activeVersionId": "301bae70-391b-4364-a15f-7f3b5256dcf3",
+  "versionCounter": 278,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-01-25T17:38:50.825Z",
+      "createdAt": "2026-01-25T17:38:50.825Z",
+      "role": "workflow:owner",
+      "workflowId": "PDjuao8X0zSNWvvN",
+      "projectId": "JIV2elLHsVFXybZ2",
+      "project": {
+        "updatedAt": "2025-12-05T03:44:52.986Z",
+        "createdAt": "2025-12-05T02:56:21.571Z",
+        "id": "JIV2elLHsVFXybZ2",
+        "name": "Niket Puranik <niket@jombay.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-02-19T02:26:04.872Z",
+    "createdAt": "2026-02-19T02:26:04.872Z",
+    "versionId": "301bae70-391b-4364-a15f-7f3b5256dcf3",
+    "workflowId": "PDjuao8X0zSNWvvN",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "/staging/pre-work-summary",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          -1600,
+          0
+        ],
+        "id": "trg-webhook-001",
+        "name": "1.1_TRG_Webhook",
+        "webhookId": "pre-work-summary-stg-v1",
+        "notes": "Entry point: Receives pre-work summary generation requests via webhook. Returns 200 immediately (default onReceived mode)."
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "has-docs-001",
+                "leftValue": "={{ $json.body.documents_urls }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEmpty"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          -1376,
+          0
+        ],
+        "id": "if-has-docs-001",
+        "name": "2.1_IF_HasDocs",
+        "notes": "Check if documents_urls field exists and is non-empty"
+      },
+      {
+        "parameters": {
+          "jsCode": "const urls = $('1.1_TRG_Webhook').first().json.body.documents_urls.split(',').map(u => u.trim()).filter(u => u.length > 0);\nreturn urls.map(url => ({ json: { mode: 'EXTRACT_CONTENT', google_drive_file_url: url } }));"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -1152,
+          -144
+        ],
+        "id": "js-split-urls-001",
+        "name": "2.2_JS_SplitUrls",
+        "notes": "Split comma-separated document URLs into individual items for drive-utils"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "8N4Pzq6oTI5ligt4r8ZJ4"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.1,
+        "position": [
+          -928,
+          -144
+        ],
+        "id": "sub-extract-doc-001",
+        "name": "2.3_SUB_ExtractDoc",
+        "alwaysOutputData": true,
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 3000,
+        "continueOnFail": true,
+        "notes": "Call drive-utils sub-workflow to extract text from each document URL"
+      },
+      {
+        "parameters": {
+          "jsCode": "const docs = [];\nfor (const item of $input.all()) {\n  if (item.json.extracted_text && item.json.status === 'success') {\n    docs.push(item.json.extracted_text);\n  }\n}\nreturn [{ json: { extracted_documents: docs, has_documents: docs.length > 0 } }];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -704,
+          -144
+        ],
+        "id": "js-collect-docs-001",
+        "name": "2.4_JS_CollectDocs",
+        "notes": "Aggregate all successfully extracted document texts into a single array"
+      },
+      {
+        "parameters": {
+          "jsCode": "const webhook = $('1.1_TRG_Webhook').first().json.body;\n\n// Inline prompt template\nlet prompt = \"# PRE-WORK SLIDE CONTENT GENERATION PROMPT\\n\\n---\\n\\n## 1. ROLE & MISSION\\n\\nYou are a **Senior Presentation Architect and Leadership Development Consultant** at Jombay. Your mission: Generate 12 pre-work slides enabling POD Owners to deliver client walkthroughs with <10% editing needed.\\n\\n**Operating Principles:**\\n\\n| Principle | Meaning |\\n|-----------|---------|\\n| **Epistemic Purity** | Every claim traces to inputs. No hallucination. No over-inference. |\\n| **Delivery Usability** | Output optimized for consultant to present confidently. |\\n\\n---\\n\\n## 2. INPUT STRUCTURE\\n\\nInputs are appended at the end of this prompt.\\n\\n### Fixed Inputs (Always Present)\\n- **`<project_details>`** \u2014 Client name, industry, participant count, scope, timeline, delivery mode\\n- **`<project_summary>`** \u2014 Consolidated FGDs (participants, managers, leaders), interviews, discovery notes. **This is your PRIMARY evidence source.**\\n\\n### Variable Inputs (If Available)\\n- **`<ctm>`** \u2014 CTM or client's competency model\\n- **`<project_documents>`** \u2014 Strategy docs, values, org structure, other materials\\n\\n**Rule:** If variable inputs are absent, generate using fixed inputs. Flag in `gaps` where CTM/docs would strengthen content.\\n\\n---\\n\\n## 3. EVIDENCE FRAMEWORK\\n\\n### 3.1 Evidence Tiers\\n\\n| Tier | Type | Examples | Use For |\\n|------|------|----------|---------|\\n| **T1** | Verbatim quotes | \\\"Participant said: 'I escalate because...'\\\" | Slides 2.3, 2.4 ONLY |\\n| **T2** | FGD observations | \\\"Participants reported struggling with...\\\" | All slides |\\n| **T3** | Gap analysis / Discovery notes | \\\"Discovery identified ~80% dependency\\\" | All slides |\\n| **T4** | Leadership interviews | \\\"Leaders expect managers to...\\\" | Desired states, insights |\\n| **T5** | Strategic documents | \\\"Company vision states...\\\" | Context, desired state |\\n| **T6** | Your synthesis | Patterns identified across sources | Insights only |\\n\\n### 3.2 Evidence Rules\\n\\n| Slide | Minimum Tier | Rationale |\\n|-------|--------------|-----------|\\n| 2.3 (Examples) | T1 only | Must be authentic quotes for scenario design |\\n| 2.4 (Jargon) | T1 only | Must be actual client terminology |\\n| All others | T2-T6 acceptable | Patterns matter, exact words don't |\\n\\n**GROUNDING RULE:** For every bullet you write, you must be able to point to a specific passage in the inputs that supports it. If you cannot identify the source passage, do not include the bullet. Leave the section shorter rather than fabricating content.\\n\\n### 3.3 What You May vs May Not Do\\n\\n**YOU MUST:**\\n- Use ALL available evidence (T1-T6) appropriately\\n- Synthesize patterns into insights (only as many as strong evidence supports)\\n- Push root causes to Level 2-3 depth\\n- Separate learning interventions from organizational requirements\\n\\n**YOU MAY NOT:**\\n- Invent statistics, quotes, demographics not in inputs\\n- Assume business context, culture, values not stated\\n- Fill gaps with generic consultant-speak\\n- Pad sections with unsupported content. Use all available T2-T4 evidence, but if a section has only 1-2 weak evidence points, include those and flag the thinness in `gaps` rather than fabricating additional content.\\n\\n---\\n\\n## 4. OUTPUT FORMAT\\n\\n### 4.1 Structure\\n\\nOutput as **pure JSON** with this structure:\\n\\n```json\\n{\\n  \\\"metadata\\\": {\\n    \\\"project_name\\\": \\\"Project name from inputs\\\",\\n    \\\"client_name\\\": \\\"Client name\\\",\\n    \\\"generated_date\\\": \\\"DD-MM-YYYY\\\",\\n    \\\"total_slides\\\": 12,\\n    \\\"overall_confidence\\\": \\\"High | Medium | Low\\\"\\n  },\\n  \\\"slides\\\": [\\n    {\\n      \\\"slide_id\\\": \\\"1.1\\\",\\n      \\\"template_reference\\\": \\\"9\\\",\\n      \\\"slide_title\\\": \\\"PROJECT OVERVIEW\\\",\\n      \\\"confidence\\\": \\\"High\\\",\\n      \\\"bullets\\\": {\\n        \\\"section_name\\\": [\\\"Bullet 1\\\", \\\"Bullet 2\\\"]\\n      },\\n      \\\"consultant_notes\\\": {\\n        \\\"walkthrough_tip\\\": \\\"One-line key message\\\",\\n        \\\"slide_notes\\\": [\\\"Point 1\\\", \\\"Point 2\\\"],\\n        \\\"gaps\\\": [],\\n        \\\"conflicts\\\": [],\\n        \\\"ambiguity\\\": []\\n      }\\n    },\\n    { \\\"slide_id\\\": \\\"1.2\\\", \\\"...\\\" : \\\"...\\\" },\\n    { \\\"slide_id\\\": \\\"1.3\\\", \\\"...\\\" : \\\"...\\\" }\\n  ]\\n}\\n```\\n**Structure Rule:** The \\\"slides\\\" key MUST be a JSON array of slide objects (NOT a keyed object). Each slide has a \\\"slide_id\\\" field. Top-level metadata stays outside. Do not flatten slides to root level.\\n\\n### 4.2 Field Definitions\\n\\n| Field | Source | Description |\\n|-------|--------|-------------|\\n| `slide_id` | Fixed | Slide number (e.g., \\\"1.1\\\") |\\n| `template_reference` | Fixed | Internal template slide number |\\n| `slide_title` | Fixed | Slide name in caps |\\n| `confidence` | Assessed | High / Medium / Low based on evidence quality |\\n| `bullets` | Extracted from inputs | Sectioned object with deck-ready statements |\\n| `consultant_notes` | Mixed | Delivery intelligence for consultant |\\n\\n### 4.3 Bullets Rules\\n\\nBullets are **deck-ready** \u2014 copy-paste into presentation.\\n\\n| Don't Write | Do Write |\\n|-------------|----------|\\n| \\\"As noted in FGDs, managers struggle with...\\\" | \\\"Managers default to execution over delegation\\\" |\\n| \\\"Leadership interview revealed that...\\\" | \\\"Strategic thinking expected but not practiced\\\" |\\n| \\\"Based on gap analysis findings...\\\" | \\\"Decision-making bottlenecked at senior levels\\\" |\\n| \\\"Strategic alignment needs improvement across functions\\\" | \\\"Quality and Engineering are pulling in different directions on customer specs \u2014 neither side sees the other's constraints\\\" |\\n| \\\"Leadership development gap identified in mid-level cohort\\\" | \\\"These managers were promoted for being great individual contributors, but nobody taught them how to lead a team\\\" |\\n\\n**No attribution. No citations. No meta-language about sources. Clean statements only.**\\n\\n**Specificity test:** For every bullet, ask: if you removed the client name, could this sentence appear in any other company's deck? If yes, rewrite with THIS client's specific context, examples, and language.\\n\\n### 4.4 consultant_notes Structure\\n\\n| Field | Source | Purpose |\\n|-------|--------|---------|\\n| `walkthrough_tip` | Derived | One-line key message for this slide |\\n| `slide_notes` | **AI-generated** | Max 5 presentation strategy points |\\n| `gaps` | Identified | What's missing from inputs |\\n| `conflicts` | Identified | What contradicts between sources |\\n| `ambiguity` | Identified | What's unclear or needs validation |\\n\\n**Rule:** If confidence is High and no issues exist, `gaps`, `conflicts`, `ambiguity` can be empty arrays.\\n\\n### 4.5 VOICE & TONE\\n\\nWrite as a senior consultant briefing a colleague, not as an AI generating content.\\n\\n| AI-Generated (Avoid) | Natural Consultant Voice (Use) |\\n|---|---|\\n| \\\"Managers default to execution over delegation\\\" | \\\"Most managers are still doing the work themselves rather than building their team's capability to deliver\\\" |\\n| \\\"Cross-functional collaboration remains suboptimal\\\" | \\\"Teams are working in silos \u2014 when Quality flags an issue, Engineering treats it as an interruption rather than a shared problem\\\" |\\n| \\\"Decision-making bottlenecked at senior levels\\\" | \\\"Routine decisions are getting stuck because people wait for their manager's nod instead of using their own judgment\\\" |\\n| \\\"Strategic thinking expected but not practiced\\\" | \\\"Everyone agrees strategic thinking matters, but in practice, the day-to-day firefighting wins every time\\\" |\\n\\n**Voice principles:**\\n- Use concrete, specific language grounded in the client's reality \u2014 not abstract patterns\\n- Write the way you'd explain it to a smart colleague over coffee\\n- Prefer active voice and specific actors (\\\"managers\\\", \\\"the QA team\\\") over passive constructions (\\\"it was observed that...\\\")\\n- If a bullet could apply to any company, it's too generic \u2014 make it specific to THIS client\\n- Avoid consultant jargon: \\\"suboptimal\\\", \\\"leverage\\\", \\\"synergies\\\", \\\"drive alignment\\\"\\n- Use plain language: \\\"not working well\\\", \\\"use\\\", \\\"working together\\\", \\\"get on the same page\\\"\\n\\n---\\n\\n## 5. slide_notes GENERATION\\n\\nThis is where AI adds consulting intelligence. Generate based on slide type:\\n\\n**Narrative voice for slide_notes:**\\n- Write as if coaching a junior consultant: direct, practical, specific\\n- Use the client's own language and terminology from the inputs\\n- Reference specific scenarios from the FGDs, not abstract patterns\\n- \\\"If the CHRO asks about timeline...\\\" not \\\"Stakeholder may inquire regarding...\\\"\\n\\n### Context Slides (1.1, 1.2, 1.3)\\nFocus on: Alignment, expectation-setting, client psychology\\n\\n| Consider | Examples |\\n|----------|----------|\\n| Alignment moments | \\\"Pause after themes \u2014 confirm client sees these as priorities\\\" |\\n| Expectation setting | \\\"This frames scope \u2014 refer back if client expands asks later\\\" |\\n| Client psychology | \\\"New CHRO may want quick wins \u2014 acknowledge timeline sensitivity\\\" |\\n| What could go wrong | \\\"Client may feel participant count is too small for investment\\\" |\\n| Must-say / Avoid-saying | \\\"Use 'evolution' not 'gaps' when describing current state\\\" |\\n\\n### Evidence Slides (2.1, 2.2, 2.3, 2.4, 2.5)\\nFocus on: Defending sources, handling pushback, managing sensitivity\\n\\n| Consider | Examples |\\n|----------|----------|\\n| Source defensibility | \\\"If challenged on escalation data, reference 3 separate FGD groups\\\" |\\n| Sensitivity management | \\\"Raw feedback may feel harsh \u2014 frame as 'participant voice we must honor'\\\" |\\n| Pushback anticipation | \\\"Leadership may dispute current state \u2014 have specific quotes ready\\\" |\\n| What could go wrong | \\\"Client may recognize specific situations \u2014 maintain confidentiality framing\\\" |\\n| Must-say / Avoid-saying | \\\"Say 'patterns observed' not 'problems identified'\\\" |\\n\\n### Insight Slides (3.1, 3.2, 3.3, 3.4)\\nFocus on: Narrative arc, managing defensiveness, landing implications, scope boundaries\\n\\n| Consider | Examples |\\n|----------|----------|\\n| Narrative flow | \\\"This insight sets up Theme 2 \u2014 create the 'aha' before proposing solution\\\" |\\n| Defensiveness risk | \\\"Root cause implicates promotion practices \u2014 frame as 'opportunity' not 'failure'\\\" |\\n| Landing implications | \\\"Pause after org requirements \u2014 this is where budget conversations start\\\" |\\n| Scope boundaries | \\\"Preempt 'can training fix this?' by stating learning boundaries first\\\" |\\n| Must-say / Avoid-saying | \\\"Acknowledge complexity before simplifying into themes\\\" |\\n\\n**Max 5 points per slide. Prioritize by impact. Direct, actionable language.**\\n\\n---\\n\\n## 6. SLIDE SPECIFICATIONS\\n\\n### GROUP 1: CONTEXT\\n\\n---\\n\\n#### SLIDE 1.1: PROJECT OVERVIEW\\n**Template Reference:** 9\\n\\n**Bullets Sections:**\\n- `target_audience`: Who (role, level, count, experience, location)\\n- `background`: Business need, context, why now\\n- `key_themes`: 4-6 themes (must match Slide 3.3)\\n\\n**Confidence Drivers:** Approach note clarity, participant profile completeness\\n\\n---\\n\\n#### SLIDE 1.2: COMPANY PROFILE\\n**Template Reference:** 14\\n\\n**Bullets Sections:**\\n- `industry`: Primary industry/sub-sector\\n- `business_overview`: Scale, services, market position\\n- `geographic_presence`: Regions/countries\\n- `strategic_focus`: Focus areas (if available)\\n- `organization_values`: Values (if documented)\\n\\n**Note:** Internal reference slide, not always shared with client.\\n\\n---\\n\\n#### SLIDE 1.3: PARTICIPANT PROFILE\\n**Template Reference:** [Specify]\\n\\n**Bullets Sections:**\\n- `total_nominated`: Exact count\\n- `seniority_level`: Level breakdown with percentages\\n- `experience_range`: Years range\\n- `functions_represented`: Functions with counts\\n- `geographic_distribution`: Locations\\n\\n**Confidence Drivers:** Specificity of participant data in project details\\n\\n---\\n\\n### GROUP 2: EVIDENCE\\n\\n---\\n\\n#### SLIDE 2.1: CHALLENGES HEARD\\n**Template Reference:** 34\\n\\n**Bullets Sections:**\\n- `[competency_name]_participant_challenges`: What participants said\\n- `[competency_name]_manager_leader_inputs`: What managers/leaders observed\\n\\nRepeat structure for each competency in scope.\\n\\n**Evidence Tier:** T2-T4 acceptable\\n\\n---\\n\\n#### SLIDE 2.2: CURRENT VS DESIRED STATE\\n**Template Reference:** 35\\n\\n**Bullets Sections:**\\n- `[competency_name]_current_state`: Observable behaviors today\\n- `[competency_name]_desired_state`: Target behaviors\\n\\nRepeat for each competency. Use concrete, behavioral language.\\n\\n**Evidence Tier:** T2-T5 acceptable\\n\\n---\\n\\n#### SLIDE 2.3: CAPTURED EXAMPLES (VERBATIM)\\n**Template Reference:** 42\\n\\n**Bullets Sections:**\\n- `participant_examples`: Verbatim/near-verbatim from participant FGDs\\n- `manager_examples`: Verbatim from manager FGDs\\n- `leadership_examples`: Verbatim from leadership interviews\\n\\n**Evidence Tier:** T1 ONLY\\n\\n**Special Rules:**\\n- Lightly clean for grammar, preserve original meaning\\n- No attribution in bullets (attribution is implicit in section name)\\n- If T1 evidence unavailable, populate with empty array and flag in `gaps`\\n- Add `source_quality` field in consultant_notes indicating fidelity level\\n\\n**Example:**\\n```json\\n\\\"bullets\\\": {\\n  \\\"participant_examples\\\": [\\n    \\\"Cross-functional teams didn't align on timelines, causing 2-month delay on Product X\\\",\\n    \\\"Finance blocked our Q3 proposal without discussion, blindsiding us in leadership review\\\"\\n  ],\\n  \\\"manager_examples\\\": [\\n    \\\"Team lead escalates every routine decision including leave approvals\\\",\\n    \\\"1-on-1s happening but only status updates, no development conversations\\\"\\n  ],\\n  \\\"leadership_examples\\\": [\\n    \\\"Managers still doing IC work, bottlenecking team progress\\\"\\n  ]\\n},\\n\\\"consultant_notes\\\": {\\n  \\\"source_quality\\\": \\\"Mix of verbatim and near-verbatim from FGDs\\\"\\n}\\n```\\n\\n---\\n\\n#### SLIDE 2.4: CAPTURED JARGON\\n**Template Reference:** 43\\n\\n**Bullets Sections:**\\n- `organizational_terms`: Company-specific acronyms, process names\\n- `role_terms`: Title-specific language\\n- `industry_terms`: Domain terminology\\n\\n**Evidence Tier:** T1 ONLY\\n\\n**Format:** \\\"TERM = Definition (one sentence max)\\\"\\n\\n---\\n\\n#### SLIDE 2.5: OUT OF SCOPE ISSUES\\n**Template Reference:** 36\\n\\n**Bullets Sections:**\\n- `process_issues`: With intervention type needed\\n- `system_issues`: With intervention type needed\\n- `behavior_issues`: With intervention type needed\\n\\n**Format:** \\\"Issue description *(Requires: intervention type)*\\\"\\n\\n---\\n\\n### GROUP 3: INSIGHTS\\n\\n---\\n\\n#### SLIDE 3.1: OUR INSIGHTS\\n**Template Reference:** 19\\n\\n**Bullets Sections (per insight):**\\n- `insight_[n]_title`: Clear insight name\\n- `insight_[n]_pattern`: What was observed (3-5 evidence points)\\n- `insight_[n]_root_cause`: Why it happens (Level 2-3 depth, 2-3 sentences)\\n- `insight_[n]_learning_implications`: What development must address\\n- `insight_[n]_org_requirements`: What organization must do\\n\\nGenerate **only as many insights as strong evidence supports**. 2-3 well-grounded insights are better than 6 that stretch the evidence. Never pad with generic insights.\\n\\n**Root Cause Depth:**\\n- Level 1 (symptom): \\\"Managers don't delegate\\\"\\n- Level 2 (first why): \\\"Promoted for technical skills, not leadership\\\"\\n- Level 3 (second why): \\\"Organization rewarded individual heroics; promotion criteria never evolved\\\"\\n\\n---\\n\\n#### SLIDE 3.2: BEHAVIORAL THEMES FOR ASSESSMENT\\n**Template Reference:** 27\\n\\n**Bullets Sections:**\\n- `most_common`: Mentioned in 70% or more of conversations\\n- `medium_frequency`: Mentioned in 40-70%\\n- `strategically_important`: Less than 40% but critical to strategy\\n\\n**Note:** Generate only if Assessment Center is in scope. If not in scope, return slide with note in `gaps`: \\\"Assessment Center not in current scope\\\"\\n\\n---\\n\\n#### SLIDE 3.3: THEMES FOR DEVELOPMENT\\n**Template Reference:** 20\\n\\n**Bullets Sections:**\\n- `theme_[n]_name`: Theme title (MUST match Slide 1.1)\\n- `theme_[n]_subtopics`: Application-focused modules (what participants will DO)\\n- `sequencing_logic`: Why this order\\n- `pedagogical_approach`: How Kolb/Adult Learning applies\\n\\n---\\n\\n#### SLIDE 3.4: ADDITIONAL INSIGHTS (OUT OF SCOPE)\\n**Template Reference:** 25\\n\\n**Bullets Sections:**\\n- `process_improvements`: With owner/action needed\\n- `culture_leadership_actions`: With specific behavior change needed\\n- `recommendations`: Parallel initiatives, leadership engagement, post-programme\\n\\n---\\n\\n## 7. HANDLING ISSUES\\n\\n### Missing Data\\n- Generate what you CAN with available evidence\\n- Flag EXACTLY what's missing in `gaps`\\n- Never invent to fill gaps\\n\\n### Contradictions\\n- Show BOTH perspectives in relevant bullets\\n- Flag in `conflicts` with specific resolution question\\n- Example: \\\"Leadership wants strategic thinking; participants need foundational execution skills first. Resolution needed: sequence or parallel?\\\"\\n\\n### Ambiguity\\n- Flag in `ambiguity` what needs client validation\\n- Proceed with reasonable interpretation, mark confidence as Medium\\n\\n---\\n\\n## 8. ANTI-PATTERNS (DO NOT DO THESE)\\n\\n**Empty Deliverable**\\n```json\\n\\\"bullets\\\": { \\\"challenges\\\": [] },\\n\\\"gaps\\\": [\\\"No FGD data available\\\"]\\n```\\n*Why wrong: Gap Analysis exists but wasn't used.*\\n\\n**Refusing to Synthesize**\\n```json\\n\\\"insight_3_title\\\": \\\"Cannot generate without participant inputs\\\"\\n```\\n*Why wrong: T2-T4 observations exist for synthesis.*\\n\\n**Shallow Root Cause**\\n```json\\n\\\"insight_1_root_cause\\\": \\\"Managers don't delegate because they're busy\\\"\\n```\\n*Why wrong: Level 1 only. No insight into WHY.*\\n\\n**Generic Consultant-Speak**\\n```json\\n\\\"learning_implications\\\": [\\\"Develop growth mindset\\\", \\\"Build leadership capabilities\\\"]\\n```\\n*Why wrong: Could apply to any client. Not specific.*\\n\\n**Attribution in Bullets**\\n```json\\n\\\"bullets\\\": [\\\"As noted in FGDs, managers struggle with delegation\\\"]\\n```\\n*Why wrong: Bullets must be deck-ready. No meta-language.*\\n\\n**Fabricated Content**\\n```json\\n\\\"bullets\\\": [\\\"72% of managers reported difficulty with delegation\\\"]\\n```\\n*Why wrong: No such statistic exists in the inputs. Numbers were invented.*\\n\\n---\\n\\n## 9. CROSS-SLIDE CONSISTENCY\\n\\nBefore outputting, verify:\\n\\n- [ ] Terminology identical across slides (participant descriptors, competency names)\\n- [ ] Themes in 1.1 = Themes in 3.3 (exact match)\\n- [ ] Insights in 3.1 link to themes in 3.3\\n- [ ] Evidence in Group 2 supports insights in Group 3\\n- [ ] Jargon from 2.4 used consistently throughout\\n\\n---\\n\\n## 10. GENERATION SEQUENCE\\n\\n1. **Parse inputs** \u2014 Catalog evidence by tier\\n2. **Lock terminology** \u2014 Participant descriptors, competency names\\n3. **Generate Group 1** \u2014 Context slides (1.1 -> 1.2 -> 1.3)\\n4. **Generate Group 2** \u2014 Evidence slides (2.1 -> 2.2 -> 2.3 -> 2.4 -> 2.5)\\n5. **Generate Group 3** \u2014 Insight slides (3.1 -> 3.2 -> 3.3 -> 3.4)\\n6. **Consistency check** \u2014 Verify terminology, theme matching, evidence flow\\n6.5. **Fabrication check** \u2014 Review each bullet: can you trace it to a specific input passage? Remove any bullet that introduces facts, statistics, quotes, or context not in the inputs. Common fabrication patterns: inventing percentage breakdowns, adding industry benchmarks, creating quotes that \\\"sound like\\\" what participants would say.\\n7. **Generate slide_notes** \u2014 AI consulting intelligence per slide type\\n8. **Output JSON**\\n\\n---\\n\\n## 11. SUCCESS CRITERIA\\n\\n**Your output succeeds when:**\\n- POD Owner can walk through with <10% editing\\n- Every claim traces to inputs (epistemic purity)\\n- Insights have Level 2-3 root causes (as many as evidence supports)\\n- Terminology consistent across all slides\\n- Themes match between 1.1 and 3.3\\n- slide_notes provide actionable presentation strategy\\n- Gaps/conflicts flagged clearly, not hidden\\n- Language sounds like a senior consultant, not an AI\\n\\n**Your output fails when:**\\n- Bullets contain attribution language\\n- Insights have shallow (Level 1) root causes\\n- Generic consultant-speak instead of client-specific content\\n- Inconsistent terminology across slides\\n- Content includes facts, statistics, or quotes not found in inputs\\n- Bullets could appear in any company's deck without modification\\n- Language uses jargon like \\\"suboptimal\\\", \\\"leverage\\\", \\\"synergies\\\"\\n\\n---\\n\\n# OUTPUT FORMAT REMINDER\\n\\nValid JSON with two keys:\\n```json\\n{\\n  \\\"metadata\\\": { \\\"project_name\\\": \\\"<project-name>\\\", \\\"client_name\\\": \\\"<client-name>\\\"...},\\n  \\\"slides\\\": [...]\\n}\\n```\\n\\nNo markdown fences. No explanatory text. Just JSON.\\n\\n---\\n\\n\\n## INPUTS\\n\";\n\n// Always add project details and project memory\nprompt += '\\n\\n# Project Details\\n<project_details>';\nprompt += webhook.project_details || '';\nprompt += '</project_details>\\n\\n';\n\nprompt += '\\n\\n# Project Summary\\n<project_summary>';\nprompt += webhook.current_project_memory || '';\nprompt += '</project_summary>\\n\\n';\n\n// Add documents if they were extracted\ntry {\n  const collectNode = $('2.4_JS_CollectDocs');\n  if (collectNode && collectNode.first()) {\n    const docs = collectNode.first().json.extracted_documents;\n    if (docs && docs.length > 0) {\n      prompt += '# Extra documents to refer\\n\\n<project_documents>';\n      docs.forEach(doc => {\n        prompt += '<document>' + doc + '</document>\\n\\n';\n      });\n      prompt += '</project_documents>\\n';\n    }\n  }\n} catch (e) {\n  // No documents path \u2014 skip\n}\n\nreturn [{\n  json: {\n    prompt: prompt,\n    model: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',\n    node_name: 'PreWorkSummary',\n    client_id: webhook.client_id,\n    project_id: webhook.project_id,\n    workflow_session_id: webhook.workflow_session_id,\n    workflow_id: webhook.workflow_id,\n    workflow_name: webhook.workflow_name,\n    workflow_session_name: webhook.workflow_session_name,\n    client_name: webhook.client_name,\n    project_name: webhook.project_name,\n    google_drive_folder_id: webhook.google_drive_folder_id\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -256,
+          0
+        ],
+        "id": "fmt-build-prompt-001",
+        "name": "3.2_FMT_BuildPrompt",
+        "notes": "Assemble full prompt: template + project_details + project_memory + extracted documents (if any)"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "GDaWNcJJtLdY8Q6Y4Yv5p"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.1,
+        "position": [
+          -32,
+          0
+        ],
+        "id": "sub-call-llm-001",
+        "name": "4.1_SUB_CallLLM",
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 5000,
+        "onError": "continueErrorOutput",
+        "notes": "Call LLM sub-workflow with assembled prompt. Output 0 = success, Output 1 = error"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "llm-error-001",
+                "leftValue": "={{ $json.body_error }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "exists",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          192,
+          0
+        ],
+        "id": "if-llm-error-001",
+        "name": "5.1_IF_LLMError",
+        "notes": "Check if LLM response contains body_error field (indicates API error)"
+      },
+      {
+        "parameters": {
+          "jsCode": "function jsonToSlideDocText(data) {\n  if (!data || typeof data !== \"object\") throw new Error(\"Expected an object as input.\");\n\n  const metadata = data.metadata || {};\n  const rawSlides = data.slides || [];\n  const slidesObj = Array.isArray(rawSlides)\n    ? rawSlides.reduce((acc, s) => { acc[\"slide_\" + String(s.slide_id || \"\").replace(\".\", \"_\")] = s; return acc; }, {})\n    : rawSlides;\n\n  const lines = [];\n\n  // ---------- Helpers ----------\n  const titleCaseFromKey = (key) =>\n    String(key)\n      .replace(/_/g, \" \")\n      .replace(/\\s+/g, \" \")\n      .trim()\n      .replace(/\\b\\w/g, (c) => c.toUpperCase());\n\n  const isNonEmptyString = (v) => typeof v === \"string\" && v.trim().length > 0;\n  const isNonEmptyArray = (v) => Array.isArray(v) && v.length > 0;\n\n  const parseSlideId = (id) => {\n    const raw = String(id ?? \"\").trim();\n    if (!raw) return { major: Number.MAX_SAFE_INTEGER, minor: Number.MAX_SAFE_INTEGER, raw: \"\" };\n\n    const parts = raw.split(\".\").map((p) => p.trim());\n    const major = Number(parts[0]);\n    const minor = parts.length > 1 ? Number(parts[1]) : 0;\n\n    return {\n      major: Number.isFinite(major) ? major : Number.MAX_SAFE_INTEGER,\n      minor: Number.isFinite(minor) ? minor : Number.MAX_SAFE_INTEGER,\n      raw,\n    };\n  };\n\n  const compareSlide = (a, b) => {\n    const pa = parseSlideId(a.slide_id);\n    const pb = parseSlideId(b.slide_id);\n    if (pa.major !== pb.major) return pa.major - pb.major;\n    if (pa.minor !== pb.minor) return pa.minor - pb.minor;\n    return String(pa.raw).localeCompare(String(pb.raw));\n  };\n\n  const hr = () => lines.push(\"\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\");\n\n  const h0 = (t) => {\n    lines.push(String(t));\n    lines.push(\"=\".repeat(Math.max(8, String(t).length)));\n  };\n\n  const h1 = (t) => {\n    lines.push(String(t));\n    lines.push(\"-\".repeat(Math.max(6, String(t).length)));\n  };\n\n  const h2 = (t) => {\n    lines.push(String(t).toUpperCase());\n  };\n\n  const addBlank = () => lines.push(\"\");\n\n  const renderList = (items, indent = \"\") => {\n    return items.map((x) => `${indent}\u2022 ${String(x)}`);\n  };\n\n  const renderAnyValueAsList = (value) => {\n    if (isNonEmptyArray(value)) return value.map((x) => String(x));\n    if (isNonEmptyString(value)) return [value.trim()];\n    if (value && typeof value === \"object\") {\n      const out = [];\n      for (const [k, v] of Object.entries(value)) {\n        if (isNonEmptyArray(v)) out.push(`${titleCaseFromKey(k)}: ${v.join(\"; \")}`);\n        else if (isNonEmptyString(v)) out.push(`${titleCaseFromKey(k)}: ${v.trim()}`);\n      }\n      return out;\n    }\n    return [];\n  };\n\n  // ---------- Deck Title ----------\n  const deckTitle = isNonEmptyString(metadata.project_name)\n    ? metadata.project_name.trim()\n    : \"SLIDE DECK\";\n\n  h0(deckTitle);\n  addBlank();\n\n  // ---------- Cover meta ----------\n  const coverMeta = [];\n  if (isNonEmptyString(metadata.client_name)) coverMeta.push(`Client: ${metadata.client_name.trim()}`);\n  if (isNonEmptyString(metadata.generated_date)) coverMeta.push(`Generated: ${metadata.generated_date.trim()}`);\n  if (metadata.total_slides != null && String(metadata.total_slides).trim() !== \"\")\n    coverMeta.push(`Total Slides: ${String(metadata.total_slides).trim()}`);\n  if (isNonEmptyString(metadata.overall_confidence))\n    coverMeta.push(`Overall Confidence: ${metadata.overall_confidence.trim()}`);\n\n  if (coverMeta.length) {\n    h1(\"Cover\");\n    lines.push(...renderList(coverMeta));\n    addBlank();\n  }\n\n  if (isNonEmptyString(metadata.generation_notes)) {\n    h1(\"Generation Notes\");\n    lines.push(metadata.generation_notes.trim());\n    addBlank();\n  }\n\n  hr();\n  addBlank();\n\n  // ---------- Slides ----------\n  const slides = Object.values(slidesObj).filter((s) => s && typeof s === \"object\").sort(compareSlide);\n\n  const grouped = new Map();\n  for (const s of slides) {\n    const { major } = parseSlideId(s.slide_id);\n    if (!grouped.has(major)) grouped.set(major, []);\n    grouped.get(major).push(s);\n  }\n\n  const sectionTitle = (major) => `SECTION ${major}`;\n\n  for (const [major, sectionSlides] of grouped.entries()) {\n    h0(sectionTitle(major));\n    addBlank();\n\n    sectionSlides.forEach((slide) => {\n      const sid = String(slide.slide_id ?? \"\").trim();\n      const title = String(slide.slide_title ?? `Slide ${sid || \"\"}`).trim();\n      const templateRef = slide.template_reference ? String(slide.template_reference).trim() : \"\";\n      const conf = slide.confidence ? String(slide.confidence).trim() : \"\";\n\n      h1(`Slide ${sid} \u2014 ${title}`);\n      if (templateRef || conf) {\n        const metaBits = [];\n        if (templateRef) metaBits.push(`Template ${templateRef}`);\n        if (conf) metaBits.push(`Confidence: ${conf}`);\n        lines.push(metaBits.join(\" | \"));\n        addBlank();\n      }\n\n      const bullets = slide.bullets || {};\n      if (bullets && typeof bullets === \"object\") {\n        for (const [k, v] of Object.entries(bullets)) {\n          const list = renderAnyValueAsList(v);\n          if (!list.length) continue;\n\n          h2(titleCaseFromKey(k));\n          lines.push(...renderList(list));\n          addBlank();\n        }\n      }\n\n      const notes = slide.consultant_notes || {};\n      const hasNotes =\n        (notes && typeof notes === \"object\" && Object.keys(notes).length > 0) ||\n        isNonEmptyString(notes?.walkthrough_tip);\n\n      if (hasNotes) {\n        const noteBlocks = [];\n\n        if (isNonEmptyString(notes.walkthrough_tip)) {\n          noteBlocks.push({ label: \"Walkthrough Tip\", items: [notes.walkthrough_tip.trim()] });\n        }\n\n        const arrays = [\n          [\"Slide Notes\", notes.slide_notes],\n          [\"Gaps / Open Questions\", notes.gaps],\n          [\"Conflicts\", notes.conflicts],\n          [\"Ambiguity\", notes.ambiguity],\n        ];\n\n        for (const [label, val] of arrays) {\n          const list = renderAnyValueAsList(val);\n          if (list.length) noteBlocks.push({ label, items: list });\n        }\n\n        if (noteBlocks.length) {\n          h2(\"Presenter Notes\");\n          for (const block of noteBlocks) {\n            lines.push(`${block.label}:`);\n            lines.push(...renderList(block.items, \"  \"));\n          }\n          addBlank();\n        }\n      }\n\n      hr();\n      addBlank();\n    });\n  }\n\n  return lines.join(\"\\n\");\n}\n\n// Main logic \u2014 LLM sub-workflow returns { llm_response: <parsed JSON object> }\n// The sub-workflow's \"Parse JSON Response\" already handles JSON extraction and repair.\nconst webhook = $('1.1_TRG_Webhook').first().json.body;\nconst jsonData = $input.first().json.llm_response;\n\nif (!jsonData || typeof jsonData !== 'object') {\n  return [{\n    \"status\": \"error\",\n    \"error_message\": \"No valid LLM response received. Expected llm_response object.\",\n    \"client_id\": webhook.client_id,\n    \"client_name\": webhook.client_name,\n    \"project_id\": webhook.project_id,\n    \"project_name\": webhook.project_name,\n    \"workflow_id\": webhook.workflow_id,\n    \"workflow_name\": webhook.workflow_name,\n    \"workflow_session_id\": webhook.workflow_session_id,\n    \"workflow_session_name\": webhook.workflow_session_name\n  }];\n}\n\ntry {\n  var content = jsonToSlideDocText(jsonData);\n\n  return [{\n    \"status\": \"processed\",\n    \"agent_response\": (function() {\n      const slides = jsonData.slides;\n      const keyedSlides = Array.isArray(slides)\n        ? slides.reduce((acc, s) => { acc[\"slide_\" + String(s.slide_id || \"\").replace(\".\", \"_\")] = s; return acc; }, {})\n        : slides;\n      return { metadata: jsonData.metadata, slides: keyedSlides };\n    })(),\n    \"content\": content,\n    \"google_drive_folder_id\": webhook.google_drive_folder_id,\n    \"client_id\": webhook.client_id,\n    \"client_name\": webhook.client_name,\n    \"project_id\": webhook.project_id,\n    \"project_name\": webhook.project_name,\n    \"workflow_id\": webhook.workflow_id,\n    \"workflow_name\": webhook.workflow_name,\n    \"workflow_session_id\": webhook.workflow_session_id,\n    \"workflow_session_name\": webhook.workflow_session_name\n  }];\n\n} catch(renderError) {\n  return [{\n    \"status\": \"error\",\n    \"error_message\": \"Rendering failed: \" + renderError.message,\n    \"agent_response\": jsonData,\n    \"client_id\": webhook.client_id,\n    \"client_name\": webhook.client_name,\n    \"project_id\": webhook.project_id,\n    \"project_name\": webhook.project_name,\n    \"workflow_id\": webhook.workflow_id,\n    \"workflow_name\": webhook.workflow_name,\n    \"workflow_session_id\": webhook.workflow_session_id,\n    \"workflow_session_name\": webhook.workflow_session_name\n  }];\n}"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          416,
+          96
+        ],
+        "id": "js-parse-render-001",
+        "name": "5.2_JS_ParseAndRender",
+        "notes": "Parse JSON from LLM response, render slides to text for Google Doc. Includes robust JSON repair."
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "parse-error-001",
+                "leftValue": "={{ $json.status }}",
+                "rightValue": "error",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          640,
+          96
+        ],
+        "id": "if-parse-error-001",
+        "name": "5.3_IF_ParseError",
+        "notes": "Check if JSON parsing/rendering failed (status === \"error\")"
+      },
+      {
+        "parameters": {
+          "driveId": "sharedWithMe",
+          "folderId": "={{ $json.google_drive_folder_id }}",
+          "title": "={{ $json.workflow_session_name }}_{{ (new Date()).getTime() }}"
+        },
+        "type": "n8n-nodes-base.googleDocs",
+        "typeVersion": 2,
+        "position": [
+          864,
+          192
+        ],
+        "id": "gdoc-create-001",
+        "name": "6.1_GDOC_Create",
+        "credentials": {
+          "googleDocsOAuth2Api": {
+            "id": "8Se5WgPUVSkK9BjF",
+            "name": "Test User Google Docs Account"
+          }
+        },
+        "onError": "continueErrorOutput",
+        "notes": "Create a new Google Doc in the project Google Drive folder"
+      },
+      {
+        "parameters": {
+          "operation": "update",
+          "documentURL": "={{ $json.id }}",
+          "simple": "={{ true }}",
+          "actionsUi": {
+            "actionFields": [
+              {
+                "action": "insert",
+                "text": "={{ $('5.2_JS_ParseAndRender').item.json.content }}"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.googleDocs",
+        "typeVersion": 2,
+        "position": [
+          1088,
+          192
+        ],
+        "id": "gdoc-update-001",
+        "name": "6.2_GDOC_Update",
+        "credentials": {
+          "googleDocsOAuth2Api": {
+            "id": "8Se5WgPUVSkK9BjF",
+            "name": "Test User Google Docs Account"
+          }
+        },
+        "notes": "Insert rendered slide content into the Google Doc"
+      },
+      {
+        "parameters": {
+          "method": "PUT",
+          "url": "=https://coreapi.ur-nl.com/workflow_sessions/{{ $('5.2_JS_ParseAndRender').item.json.workflow_session_id }}",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-Subdomain",
+                "value": "dashboard"
+              }
+            ]
+          },
+          "sendBody": true,
+          "contentType": "raw",
+          "rawContentType": "application/json",
+          "body": "={\n  \"workflow_session\": {\n    \"output_file_url\": \"https://docs.google.com/document/d/{{ $json.documentId }}\",\n    \"output_json\": {{ JSON.stringify($('5.2_JS_ParseAndRender').item.json.agent_response) }},\n    \"status\": \"completed\"\n  }\n}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.3,
+        "position": [
+          1312,
+          192
+        ],
+        "id": "api-success-001",
+        "name": "7.1_API_ReportSuccess",
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "9fZP8bOKRNJtilO1",
+            "name": "Jombay Staging API"
+          }
+        },
+        "onError": "continueErrorOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 3000,
+        "notes": "Report success to coreapi with output_file_url and output_json"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Centralized error formatter\nconst input = $input.first().json;\n\nfunction safeErrorExtract(error) {\n  if (!error) return null;\n  if (error instanceof Error || error.message) {\n    return {\n      message: error.message || 'Unknown error',\n      name: error.name,\n      stack: error.stack,\n      ...Object.keys(error).reduce((acc, key) => {\n        try { acc[key] = error[key]; } catch (e) {}\n        return acc;\n      }, {})\n    };\n  }\n  return error;\n}\n\nconst errorInfo = safeErrorExtract(input);\n\nreturn [{\n  json: {\n    status: 'error',\n    error_message: errorInfo?.message || input?.error_message || input?.body_error || 'Workflow execution failed',\n    workflow_session_id: $('1.1_TRG_Webhook').first().json.body.workflow_session_id,\n    timestamp: new Date().toISOString()\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2400,
+          -200
+        ],
+        "id": "err-format-001",
+        "name": "8.1_ERR_Format",
+        "notes": "Centralized error formatter \u2014 all error paths converge here"
+      },
+      {
+        "parameters": {
+          "method": "PUT",
+          "url": "=https://coreapi.ur-nl.com/workflow_sessions/{{ $json.workflow_session_id }}",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-Subdomain",
+                "value": "dashboard"
+              }
+            ]
+          },
+          "sendBody": true,
+          "contentType": "raw",
+          "rawContentType": "application/json",
+          "body": "={   \"workflow_session\": {  \"status\": \"error\", \"error_message\": \"{{ $json.error_message }}\"   } } ",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.3,
+        "position": [
+          2624,
+          -200
+        ],
+        "id": "err-api-001",
+        "name": "8.2_API_ReportError",
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "9fZP8bOKRNJtilO1",
+            "name": "Jombay Staging API"
+          }
+        },
+        "notes": "Report error to coreapi with error_message and execution details"
+      }
+    ],
+    "connections": {
+      "1.1_TRG_Webhook": {
+        "main": [
+          [
+            {
+              "node": "2.1_IF_HasDocs",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "2.1_IF_HasDocs": {
+        "main": [
+          [
+            {
+              "node": "2.2_JS_SplitUrls",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "3.2_FMT_BuildPrompt",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "2.2_JS_SplitUrls": {
+        "main": [
+          [
+            {
+              "node": "2.3_SUB_ExtractDoc",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "2.3_SUB_ExtractDoc": {
+        "main": [
+          [
+            {
+              "node": "2.4_JS_CollectDocs",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "2.4_JS_CollectDocs": {
+        "main": [
+          [
+            {
+              "node": "3.2_FMT_BuildPrompt",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "3.2_FMT_BuildPrompt": {
+        "main": [
+          [
+            {
+              "node": "4.1_SUB_CallLLM",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "4.1_SUB_CallLLM": {
+        "main": [
+          [
+            {
+              "node": "5.1_IF_LLMError",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "8.1_ERR_Format",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "5.1_IF_LLMError": {
+        "main": [
+          [
+            {
+              "node": "8.1_ERR_Format",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "5.2_JS_ParseAndRender",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "5.2_JS_ParseAndRender": {
+        "main": [
+          [
+            {
+              "node": "5.3_IF_ParseError",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "5.3_IF_ParseError": {
+        "main": [
+          [
+            {
+              "node": "8.1_ERR_Format",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "6.1_GDOC_Create",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "6.1_GDOC_Create": {
+        "main": [
+          [
+            {
+              "node": "6.2_GDOC_Update",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "8.1_ERR_Format",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "6.2_GDOC_Update": {
+        "main": [
+          [
+            {
+              "node": "7.1_API_ReportSuccess",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "8.1_ERR_Format": {
+        "main": [
+          [
+            {
+              "node": "8.2_API_ReportError",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Niket Puranik",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-02-19T02:26:10.524Z",
+        "id": 2958,
+        "workflowId": "PDjuao8X0zSNWvvN",
+        "versionId": "301bae70-391b-4364-a15f-7f3b5256dcf3",
+        "event": "deactivated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-19T02:26:10.543Z",
+        "id": 2959,
+        "workflowId": "PDjuao8X0zSNWvvN",
+        "versionId": "301bae70-391b-4364-a15f-7f3b5256dcf3",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-19T02:26:04.932Z",
+        "id": 2956,
+        "workflowId": "PDjuao8X0zSNWvvN",
+        "versionId": "301bae70-391b-4364-a15f-7f3b5256dcf3",
+        "event": "deactivated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-19T02:26:04.952Z",
+        "id": 2957,
+        "workflowId": "PDjuao8X0zSNWvvN",
+        "versionId": "301bae70-391b-4364-a15f-7f3b5256dcf3",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      }
+    ]
+  }
+}
