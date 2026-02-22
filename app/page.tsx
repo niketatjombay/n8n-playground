@@ -25,19 +25,38 @@ export default function DashboardPage() {
   const [data, setData] = useState<StatusData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  useEffect(() => {
+  const fetchData = () => {
+    setLoading(true);
     fetch('/api/status')
       .then((res) => res.json())
       .then((json) => {
         if (json.success) {
           setData(json.data);
+          setError(null);
         } else {
           setError(json.error || 'Unknown error');
         }
       })
       .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+        setLastUpdated(new Date());
+      });
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!document.hidden) {
+        fetchData();
+      }
+    }, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   if (loading) {
@@ -72,7 +91,24 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-zinc-100">Dashboard</h1>
+      <div className="flex items-center gap-4">
+        <h1 className="text-2xl font-semibold text-zinc-100">Dashboard</h1>
+        <button
+          onClick={fetchData}
+          disabled={loading}
+          className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors disabled:opacity-50"
+          title="Refresh"
+        >
+          <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+        </button>
+        {lastUpdated && (
+          <span className="text-xs text-zinc-500">
+            Updated {lastUpdated.toLocaleTimeString()}
+          </span>
+        )}
+      </div>
       <p className="text-sm text-zinc-400 mt-1">
         Workflow status across environments
       </p>
