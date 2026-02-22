@@ -3,35 +3,26 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import OperationLog from '@/components/OperationLog';
+import { useStatusFetch, StatusError } from '@/components/StatusFetcher';
 
 const ENVIRONMENTS = ['development', 'staging', 'production'];
 
 function DeployForm() {
   const searchParams = useSearchParams();
+  const { slugs, statusLoading, statusError, refetchStatus } = useStatusFetch();
   const [env, setEnv] = useState('development');
   const [slug, setSlug] = useState('');
-  const [slugs, setSlugs] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [steps, setSteps] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // Load available workflow slugs
+  // Pre-select from URL param once slugs are loaded
   useEffect(() => {
-    fetch('/api/status')
-      .then((res) => res.json())
-      .then((json) => {
-        if (json.success) {
-          const allSlugs = json.data.workflows.map((w: any) => w.slug);
-          setSlugs(allSlugs);
-          // Pre-select from URL param
-          const paramSlug = searchParams.get('slug');
-          if (paramSlug && allSlugs.includes(paramSlug)) {
-            setSlug(paramSlug);
-          }
-        }
-      })
-      .catch(() => {});
-  }, [searchParams]);
+    const paramSlug = searchParams.get('slug');
+    if (paramSlug && slugs.includes(paramSlug)) {
+      setSlug(paramSlug);
+    }
+  }, [searchParams, slugs]);
 
   const handleDeploy = async () => {
     setLoading(true);
@@ -59,6 +50,11 @@ function DeployForm() {
 
   return (
     <>
+      {statusError && <StatusError error={statusError} onRetry={refetchStatus} />}
+      {statusLoading && !statusError && (
+        <div className="mt-6 text-sm text-zinc-500">Loading workflows...</div>
+      )}
+
       <div className="mt-8 max-w-lg space-y-5">
         {/* Environment select */}
         <div>

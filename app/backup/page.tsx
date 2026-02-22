@@ -1,28 +1,18 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import OperationLog from '@/components/OperationLog';
+import { useStatusFetch, StatusError } from '@/components/StatusFetcher';
 
 const ENVIRONMENTS = ['development', 'staging', 'production'];
 
 export default function BackupPage() {
+  const { slugs, statusLoading, statusError, refetchStatus } = useStatusFetch();
   const [env, setEnv] = useState('development');
   const [slug, setSlug] = useState('');
-  const [slugs, setSlugs] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [steps, setSteps] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch('/api/status')
-      .then((res) => res.json())
-      .then((json) => {
-        if (json.success) {
-          setSlugs(json.data.workflows.map((w: any) => w.slug));
-        }
-      })
-      .catch(() => {});
-  }, []);
 
   const handleBackup = async () => {
     setLoading(true);
@@ -54,6 +44,11 @@ export default function BackupPage() {
       <p className="text-sm text-zinc-400 mt-1">
         Download workflow JSON from n8n and save locally
       </p>
+
+      {statusError && <StatusError error={statusError} onRetry={refetchStatus} />}
+      {statusLoading && !statusError && (
+        <div className="mt-6 text-sm text-zinc-500">Loading workflows...</div>
+      )}
 
       <div className="mt-8 max-w-lg space-y-5">
         {/* Environment select */}

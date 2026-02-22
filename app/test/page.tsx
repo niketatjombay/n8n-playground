@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useStatusFetch, StatusError } from '@/components/StatusFetcher';
 
 const ENVIRONMENTS = ['development', 'staging', 'production'];
 
@@ -13,24 +14,13 @@ interface TestResponse {
 }
 
 export default function TestPage() {
+  const { slugs, statusLoading, statusError, refetchStatus } = useStatusFetch();
   const [slug, setSlug] = useState('');
   const [env, setEnv] = useState('development');
   const [payload, setPayload] = useState('{\n  \n}');
-  const [slugs, setSlugs] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<TestResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch('/api/status')
-      .then((res) => res.json())
-      .then((json) => {
-        if (json.success) {
-          setSlugs(json.data.workflows.map((w: any) => w.slug));
-        }
-      })
-      .catch(() => {});
-  }, []);
 
   const handleTrigger = async () => {
     if (!slug) return;
@@ -78,6 +68,11 @@ export default function TestPage() {
       <p className="text-sm text-zinc-400 mt-1">
         Trigger a workflow webhook with a test payload
       </p>
+
+      {statusError && <StatusError error={statusError} onRetry={refetchStatus} />}
+      {statusLoading && !statusError && (
+        <div className="mt-6 text-sm text-zinc-500">Loading workflows...</div>
+      )}
 
       <div className="mt-8 max-w-2xl space-y-5">
         <div className="grid grid-cols-2 gap-4">
