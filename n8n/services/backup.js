@@ -141,6 +141,15 @@ async function backup({ env, slug = null }) {
     }
   }
 
+  const { logActivity } = require('./activity-log');
+  logActivity({
+    action: 'backup',
+    slug: slug || 'all',
+    env,
+    result: steps.some(s => s.status === 'error') ? 'error' : 'success',
+    steps,
+  });
+
   return { env, steps };
 }
 

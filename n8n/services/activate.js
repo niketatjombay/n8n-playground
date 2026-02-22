@@ -65,6 +65,14 @@ async function activate({ slug, env: envArg, deactivate = false }) {
 
     updateWorkflowEnv(slug, env, { active: !deactivate });
 
+    const { logActivity } = require('./activity-log');
+    logActivity({
+      action: deactivate ? 'deactivate' : 'activate',
+      slug,
+      env,
+      result: 'success',
+    });
+
     return {
       success: true,
       slug,
