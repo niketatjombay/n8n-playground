@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useStatusFetch } from '@/components/StatusFetcher';
 import { apiFetch } from '@/lib/api';
 
@@ -22,7 +22,7 @@ export default function ActivityPage() {
   const [filterSlug, setFilterSlug] = useState('');
   const [loading, setLoading] = useState(true);
 
-  const loadActivity = () => {
+  const loadActivity = useCallback(() => {
     setLoading(true);
     const params = new URLSearchParams({ limit: '50' });
     if (filterAction !== 'all') params.set('action', filterAction);
@@ -35,11 +35,11 @@ export default function ActivityPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  };
+  }, [filterAction, filterSlug]);
 
   useEffect(() => {
     loadActivity();
-  }, [filterAction, filterSlug]);
+  }, [loadActivity]);
 
   return (
     <div>
