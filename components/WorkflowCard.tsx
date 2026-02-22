@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import EnvironmentBadge from './EnvironmentBadge';
 
@@ -23,6 +24,7 @@ interface WorkflowData {
 interface WorkflowCardProps {
   workflow: WorkflowData;
   envList: string[];
+  onStatusChange?: () => void;
 }
 
 function relativeTime(dateStr: string): string {
@@ -40,7 +42,28 @@ function relativeTime(dateStr: string): string {
   return 'just now';
 }
 
-export default function WorkflowCard({ workflow, envList }: WorkflowCardProps) {
+export default function WorkflowCard({ workflow, envList, onStatusChange }: WorkflowCardProps) {
+  const [togglingEnv, setTogglingEnv] = useState<string | null>(null);
+
+  const handleToggle = async (env: string, active: boolean) => {
+    setTogglingEnv(env);
+    try {
+      const res = await fetch('/api/activate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: workflow.slug, env, deactivate: active }),
+      });
+      const json = await res.json();
+      if (json.success && onStatusChange) {
+        onStatusChange();
+      }
+    } catch {
+      // silently fail for inline toggle
+    } finally {
+      setTogglingEnv(null);
+    }
+  };
+
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
       <div className="px-5 py-4 border-b border-zinc-800">
@@ -86,6 +109,15 @@ export default function WorkflowCard({ workflow, envList }: WorkflowCardProps) {
                 <span className="text-xs text-zinc-600">
                   {relativeTime(envData.lastDeployedAt)}
                 </span>
+              )}
+              {!envData.isTodo && envData.n8nId && (
+                <button
+                  onClick={() => handleToggle(env, envData.active)}
+                  disabled={togglingEnv === env}
+                  className="text-xs px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700 transition-colors disabled:opacity-50 ml-auto"
+                >
+                  {togglingEnv === env ? '...' : envData.active ? 'Deactivate' : 'Activate'}
+                </button>
               )}
             </div>
           );

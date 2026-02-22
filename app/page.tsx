@@ -140,6 +140,7 @@ export default function DashboardPage() {
               key={wf.slug}
               workflow={wf as any}
               envList={data.environments}
+              onStatusChange={fetchData}
             />
           ))}
         </div>
