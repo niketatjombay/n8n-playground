@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { apiFetch } from '@/lib/api';
 
 export function useStatusFetch() {
   const [slugs, setSlugs] = useState<string[]>([]);
@@ -11,7 +12,7 @@ export function useStatusFetch() {
   const fetchStatus = () => {
     setStatusLoading(true);
     setStatusError(null);
-    fetch('/api/status')
+    apiFetch('/api/status')
       .then((res) => res.json())
       .then((json) => {
         if (json.success) {
