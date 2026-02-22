@@ -6,10 +6,14 @@ import { usePathname } from 'next/navigation';
 const navLinks = [
   { href: '/', label: 'Dashboard' },
   { href: '/workflows', label: 'Workflows' },
+  { href: '/executions', label: 'Executions' },
   { href: '/deploy', label: 'Deploy' },
   { href: '/promote', label: 'Promote' },
   { href: '/backup', label: 'Backup' },
+  { href: '/activate', label: 'Activate' },
   { href: '/test', label: 'Test' },
+  { href: '/history', label: 'History' },
+  { href: '/activity', label: 'Activity' },
 ];
 
 export default function Sidebar() {
