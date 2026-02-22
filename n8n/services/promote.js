@@ -178,7 +178,7 @@ async function promote({ slug, sourceEnv: srcArg, targetEnv: tgtArg }) {
     }
 
     const subPath = path.join(
-      __dirname, '../workflows', sourceEnv, 'sub_workflows', `${subSlug}.json`
+      process.cwd(), 'n8n', 'workflows', sourceEnv, 'sub_workflows', `${subSlug}.json`
     );
     if (!fs.existsSync(subPath)) {
       steps.push({
@@ -197,7 +197,7 @@ async function promote({ slug, sourceEnv: srcArg, targetEnv: tgtArg }) {
       const tgtSubWf = remapWorkflow(srcSubWf, slug, sourceEnv, targetEnv);
 
       // Write remapped file to target directory
-      const tgtSubDir = path.join(__dirname, '../workflows', targetEnv, 'sub_workflows');
+      const tgtSubDir = path.join(process.cwd(), 'n8n', 'workflows', targetEnv, 'sub_workflows');
       fs.mkdirSync(tgtSubDir, { recursive: true });
       fs.writeFileSync(
         path.join(tgtSubDir, `${subSlug}.json`),
@@ -234,7 +234,7 @@ async function promote({ slug, sourceEnv: srcArg, targetEnv: tgtArg }) {
 
   // --- Promote main workflow ---
   const mainPath = path.join(
-    __dirname, '../workflows', sourceEnv, slug, 'main_workflow.json'
+    process.cwd(), 'n8n', 'workflows', sourceEnv, slug, 'main_workflow.json'
   );
   if (!fs.existsSync(mainPath)) {
     return {
@@ -254,7 +254,7 @@ async function promote({ slug, sourceEnv: srcArg, targetEnv: tgtArg }) {
     const tgtMainWf = remapWorkflow(srcMainWf, slug, sourceEnv, targetEnv);
 
     // Write remapped file to target directory
-    const tgtMainDir = path.join(__dirname, '../workflows', targetEnv, slug);
+    const tgtMainDir = path.join(process.cwd(), 'n8n', 'workflows', targetEnv, slug);
     fs.mkdirSync(tgtMainDir, { recursive: true });
     fs.writeFileSync(
       path.join(tgtMainDir, 'main_workflow.json'),

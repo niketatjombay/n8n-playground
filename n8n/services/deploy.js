@@ -70,7 +70,7 @@ async function deploy({ env, slug = null }) {
   const allSubs = getSubWorkflows();
   for (const [subSlug, subEntry] of Object.entries(allSubs)) {
     const subPath = path.join(
-      __dirname, '../workflows', env, 'sub_workflows', `${subSlug}.json`
+      process.cwd(), 'n8n', 'workflows', env, 'sub_workflows', `${subSlug}.json`
     );
 
     if (!fs.existsSync(subPath)) {
@@ -136,7 +136,7 @@ async function deploy({ env, slug = null }) {
     }
 
     const mainPath = path.join(
-      __dirname, '../workflows', env, wfSlug, 'main_workflow.json'
+      process.cwd(), 'n8n', 'workflows', env, wfSlug, 'main_workflow.json'
     );
     if (!fs.existsSync(mainPath)) {
       steps.push({

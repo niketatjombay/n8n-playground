@@ -11,7 +11,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const METADATA_PATH = path.join(__dirname, '../workflows/metadata.json');
+const METADATA_PATH = path.join(process.cwd(), 'n8n', 'workflows', 'metadata.json');
 
 function readMetadata() {
   const raw = fs.readFileSync(METADATA_PATH, 'utf8');

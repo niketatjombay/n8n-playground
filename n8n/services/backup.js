@@ -65,7 +65,7 @@ async function backup({ env, slug = null }) {
     }
 
     try {
-      const mainDir = path.join(__dirname, '../workflows', env, wfSlug);
+      const mainDir = path.join(process.cwd(), 'n8n', 'workflows', env, wfSlug);
       fs.mkdirSync(mainDir, { recursive: true });
 
       const wf = await client.getWorkflow(mainId);
@@ -116,7 +116,7 @@ async function backup({ env, slug = null }) {
     }
 
     try {
-      const subDir = path.join(__dirname, '../workflows', env, 'sub_workflows');
+      const subDir = path.join(process.cwd(), 'n8n', 'workflows', env, 'sub_workflows');
       fs.mkdirSync(subDir, { recursive: true });
 
       const subWf = await client.getWorkflow(subId);
