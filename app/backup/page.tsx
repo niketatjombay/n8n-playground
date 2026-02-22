@@ -9,7 +9,7 @@ const ENVIRONMENTS = ['development', 'staging', 'production'];
 export default function BackupPage() {
   const { slugs, statusLoading, statusError, refetchStatus } = useStatusFetch();
   const [env, setEnv] = useState('development');
-  const [slug, setSlug] = useState('');
+  const [selectedSlugs, setSelectedSlugs] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [steps, setSteps] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -19,18 +19,24 @@ export default function BackupPage() {
     setSteps([]);
     setError(null);
     try {
-      const res = await fetch('/api/backup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ env, slug: slug || null }),
-      });
-      const json = await res.json();
-      if (json.success && json.data) {
-        const resultSteps = json.data.steps || json.data;
-        setSteps(Array.isArray(resultSteps) ? resultSteps : []);
-      } else {
-        setError(json.error || 'Backup failed');
+      const slugsToProcess = selectedSlugs.length > 0 ? selectedSlugs : [null];
+      const allSteps: any[] = [];
+      for (const s of slugsToProcess) {
+        const res = await fetch('/api/backup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ env, slug: s }),
+        });
+        const json = await res.json();
+        if (json.success && json.data) {
+          const resultSteps = json.data.steps || json.data;
+          if (Array.isArray(resultSteps)) allSteps.push(...resultSteps);
+        } else {
+          setError(json.error || 'Backup failed');
+          break;
+        }
       }
+      setSteps(allSteps);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -69,23 +75,33 @@ export default function BackupPage() {
           </select>
         </div>
 
-        {/* Optional workflow select */}
+        {/* Workflow select */}
         <div>
-          <label className="block text-sm font-medium text-zinc-300 mb-1.5">
-            Workflow (optional)
-          </label>
-          <select
-            value={slug}
-            onChange={(e) => setSlug(e.target.value)}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-          >
-            <option value="">All workflows</option>
+          <label className="block text-sm font-medium text-zinc-300 mb-1.5">Workflows</label>
+          <div className="space-y-1.5 max-h-48 overflow-y-auto bg-zinc-900 border border-zinc-800 rounded-lg p-3">
+            <div className="flex gap-3 mb-2 pb-2 border-b border-zinc-800">
+              <button type="button" onClick={() => setSelectedSlugs([...slugs])} className="text-xs text-blue-400 hover:text-blue-300">
+                Select All
+              </button>
+              <button type="button" onClick={() => setSelectedSlugs([])} className="text-xs text-zinc-400 hover:text-zinc-300">
+                Deselect All
+              </button>
+            </div>
             {slugs.map((s) => (
-              <option key={s} value={s}>
+              <label key={s} className="flex items-center gap-2 text-sm text-zinc-200 cursor-pointer hover:text-zinc-100">
+                <input
+                  type="checkbox"
+                  checked={selectedSlugs.includes(s)}
+                  onChange={(e) => {
+                    if (e.target.checked) setSelectedSlugs([...selectedSlugs, s]);
+                    else setSelectedSlugs(selectedSlugs.filter(x => x !== s));
+                  }}
+                  className="rounded border-zinc-700 bg-zinc-800"
+                />
                 {s}
-              </option>
+              </label>
             ))}
-          </select>
+          </div>
         </div>
 
         {/* Backup button */}
