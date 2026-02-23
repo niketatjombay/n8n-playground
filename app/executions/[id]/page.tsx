@@ -169,7 +169,7 @@ function JsonViewer({ label, data }: { label: string; data: unknown }) {
 // Node Card component (recursive for sub-workflows)
 // ---------------------------------------------------------------------------
 
-function NodeCard({ node, depth = 0 }: { node: NodeInfo; depth?: number }) {
+function NodeCard({ node, depth = 0, env = 'development' }: { node: NodeInfo; depth?: number; env?: string }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -254,7 +254,7 @@ function NodeCard({ node, depth = 0 }: { node: NodeInfo; depth?: number }) {
                   {node.subExecution.status}
                 </span>
                 <Link
-                  href={`/executions/${node.subExecution.id}?env=development`}
+                  href={`/executions/${node.subExecution.id}?env=${env}`}
                   className="text-xs text-blue-400 hover:text-blue-300 underline underline-offset-2"
                 >
                   #{node.subExecution.id}
@@ -267,7 +267,7 @@ function NodeCard({ node, depth = 0 }: { node: NodeInfo; depth?: number }) {
               )}
               <div className="space-y-0.5">
                 {node.subExecution.nodes.map((subNode, i) => (
-                  <NodeCard key={`${subNode.name}-${i}`} node={subNode} depth={depth + 1} />
+                  <NodeCard key={`${subNode.name}-${i}`} node={subNode} depth={depth + 1} env={env} />
                 ))}
               </div>
             </div>
@@ -502,7 +502,7 @@ export default function ExecutionDetailPage({
         ) : (
           <div className="bg-zinc-900 border border-zinc-800 rounded-lg divide-y divide-zinc-800/50">
             {nodes.map((node, i) => (
-              <NodeCard key={`${node.name}-${i}`} node={node} />
+              <NodeCard key={`${node.name}-${i}`} node={node} env={env} />
             ))}
             {nodes.length === 0 && (
               <div className="px-4 py-8 text-center text-sm text-zinc-500">
