@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useStatusFetch, StatusError } from '@/components/StatusFetcher';
 import { apiFetch } from '@/lib/api';
 
@@ -108,7 +109,14 @@ export default function ExecutionsPage() {
               <tbody className="divide-y divide-zinc-800/50">
                 {executions.map((exec) => (
                   <tr key={exec.id}>
-                    <td className="px-4 py-2.5 text-zinc-300 font-mono text-xs">{exec.id}</td>
+                    <td className="px-4 py-2.5">
+                      <Link
+                        href={`/executions/${exec.id}?env=${env}`}
+                        className="text-blue-400 hover:text-blue-300 font-mono text-xs underline underline-offset-2"
+                      >
+                        {exec.id}
+                      </Link>
+                    </td>
                     <td className="px-4 py-2.5">
                       <span className={`text-xs px-2 py-0.5 rounded ${statusColor(exec.status)}`}>{exec.status}</span>
                     </td>
