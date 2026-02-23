@@ -320,7 +320,7 @@ function aggregateTokenSummary(nodes) {
  * Fetch full execution detail including per-node breakdown and token usage.
  * Recursively fetches sub-workflow executions.
  */
-async function getExecutionDetail({ executionId, env: envArg }) {
+async function getExecutionDetail({ executionId }) {
   loadEnv();
 
   if (!executionId) {
