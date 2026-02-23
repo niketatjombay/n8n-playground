@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, use } from 'react';
+import { useState, useEffect, useCallback, useMemo, use } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
@@ -138,13 +138,13 @@ function sourceColor(source: string): string {
 
 function JsonViewer({ label, data }: { label: string; data: unknown }) {
   const [copied, setCopied] = useState(false);
-  const text = JSON.stringify(data, null, 2);
+  const text = useMemo(() => JSON.stringify(data, null, 2), [data]);
 
   const copy = useCallback(() => {
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    });
+    }).catch(() => { /* clipboard not available */ });
   }, [text]);
 
   return (
@@ -323,13 +323,15 @@ export default function ExecutionDetailPage({
     return () => { cancelled = true; };
   }, [id, env]);
 
+  const rawText = useMemo(() => data?.raw ? JSON.stringify(data.raw, null, 2) : '', [data]);
+
   const copyRaw = useCallback(() => {
-    if (!data?.raw) return;
-    navigator.clipboard.writeText(JSON.stringify(data.raw, null, 2)).then(() => {
+    if (!rawText) return;
+    navigator.clipboard.writeText(rawText).then(() => {
       setRawCopied(true);
       setTimeout(() => setRawCopied(false), 2000);
-    });
-  }, [data]);
+    }).catch(() => { /* clipboard not available */ });
+  }, [rawText]);
 
   const tokenEntries = data ? Object.entries(data.tokenSummary) : [];
 
@@ -496,7 +498,7 @@ export default function ExecutionDetailPage({
               </button>
             </div>
             <pre className="bg-zinc-950 border border-zinc-800 rounded p-3 text-xs text-zinc-300 font-mono overflow-auto max-h-[600px] whitespace-pre-wrap break-words">
-              {JSON.stringify(data.raw, null, 2)}
+              {rawText}
             </pre>
           </div>
         ) : (
