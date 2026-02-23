@@ -68,13 +68,14 @@ const LLM_NODE_TYPES = [
 // Known Execute Workflow (sub-workflow) node types
 const EXECUTE_WORKFLOW_NODE_TYPES = [
   'n8n-nodes-base.executeWorkflow',
-  'n8n-nodes-base.executeWorkflowTrigger',
+  '@n8n/n8n-nodes-base.executeWorkflow',
 ];
 
 /**
  * Check if a node type is an LLM node.
  */
 function isLlmNode(nodeType) {
+  if (!nodeType) return false;
   return LLM_NODE_TYPES.some(
     (t) => nodeType === t || nodeType.startsWith(t + '.')
   );
@@ -84,6 +85,7 @@ function isLlmNode(nodeType) {
  * Check if a node type is an Execute Workflow node.
  */
 function isExecuteWorkflowNode(nodeType) {
+  if (!nodeType) return false;
   return EXECUTE_WORKFLOW_NODE_TYPES.some(
     (t) => nodeType === t || nodeType.startsWith(t + '.')
   );
@@ -297,8 +299,8 @@ function aggregateTokenSummary(nodes) {
         summary[model].inputTokens += node.tokenUsage.inputTokens;
         summary[model].outputTokens += node.tokenUsage.outputTokens;
 
-        // If any usage for a model is estimated, mark the whole model as estimated
-        if (node.tokenUsage.source === 'estimated' && summary[model].source === 'actual') {
+        // If sources differ for the same model, mark as mixed
+        if (node.tokenUsage.source !== summary[model].source) {
           summary[model].source = 'mixed';
         }
       }
@@ -325,9 +327,6 @@ async function getExecutionDetail({ executionId, env: envArg }) {
     return { success: false, error: 'executionId is required' };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const env = envArg ? resolveEnv(envArg) : 'development';
-
   try {
     const client = new N8nClient();
     const raw = await client.getExecution(executionId);
@@ -337,7 +336,8 @@ async function getExecutionDetail({ executionId, env: envArg }) {
 
     const nodes = buildNodeList(runData, workflowData);
 
-    // Resolve sub-workflow executions
+    // Collect sub-workflow execution IDs and their corresponding nodes
+    const subFetches = [];
     for (const node of nodes) {
       if (!node.isSubWorkflow || !node.outputData) continue;
 
@@ -362,8 +362,22 @@ async function getExecutionDetail({ executionId, env: envArg }) {
       }
 
       if (subExecutionId) {
-        try {
-          const subRaw = await client.getExecution(subExecutionId);
+        subFetches.push({ node, subExecutionId });
+      }
+    }
+
+    // Fetch all sub-workflow executions in parallel
+    if (subFetches.length > 0) {
+      const results = await Promise.allSettled(
+        subFetches.map(({ subExecutionId }) => client.getExecution(subExecutionId))
+      );
+
+      for (let i = 0; i < subFetches.length; i++) {
+        const { node, subExecutionId } = subFetches[i];
+        const result = results[i];
+
+        if (result.status === 'fulfilled') {
+          const subRaw = result.value;
           const subRunData = subRaw.data?.resultData?.runData;
           const subWorkflowData = subRaw.workflowData;
           const subNodes = buildNodeList(subRunData, subWorkflowData);
@@ -374,7 +388,7 @@ async function getExecutionDetail({ executionId, env: envArg }) {
             status: subRaw.status || null,
             nodes: subNodes,
           };
-        } catch {
+        } else {
           // Sub-execution fetch failed — leave as null, don't break the parent
           node.subExecution = null;
         }
