@@ -91,6 +91,10 @@ class N8nClient {
     return this.request(`/executions?${params}`);
   }
 
+  async getExecution(executionId) {
+    return this.request(`/executions/${executionId}?includeData=true`);
+  }
+
   // Trigger workflow (if it has a webhook)
   async triggerWorkflow(webhookPath, data) {
     const webhookUrl = `${this.baseURL}/webhook/${webhookPath}`;
