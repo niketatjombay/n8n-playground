@@ -262,6 +262,7 @@ function buildNodeList(runData, workflowData) {
         startTime: exec.startTime ?? null,
         inputData: null, // reserved for future use
         outputData,
+        metadata: exec.metadata || null,
         tokenUsage,
         isSubWorkflow: isExecuteWorkflowNode(nodeType),
         subExecution: null, // populated later for sub-workflows
@@ -279,6 +280,105 @@ function buildNodeList(runData, workflowData) {
   });
 
   return nodes;
+}
+
+/**
+ * Detect LLM usage in sub-workflow nodes by inspecting the trigger node's
+ * input data for a model+prompt pattern (common when LLM calls go through
+ * a custom backend via HTTP Request nodes rather than native langchain nodes).
+ *
+ * Pattern detected:
+ *   executeWorkflowTrigger (has model + prompt in output) →
+ *   httpRequest (calls LLM backend) →
+ *   code (parses response)
+ *
+ * Sets tokenUsage on the parent Execute Workflow node in the main flow.
+ */
+function extractSubWorkflowTokenUsage(nodes) {
+  for (const node of nodes) {
+    if (!node.subExecution || !node.subExecution.nodes || node.subExecution.nodes.length === 0) continue;
+    // Skip if this node already has token usage
+    if (node.tokenUsage) continue;
+
+    const subNodes = node.subExecution.nodes;
+
+    // Find trigger node with model+prompt info
+    const triggerNode = subNodes.find(
+      (n) => n.type === 'n8n-nodes-base.executeWorkflowTrigger'
+    );
+    if (!triggerNode) continue;
+
+    // Extract model and prompt from trigger output
+    let model = null;
+    let prompt = null;
+    let systemPrompt = null;
+    if (triggerNode.outputData?.main) {
+      for (const branch of triggerNode.outputData.main) {
+        if (!Array.isArray(branch)) continue;
+        for (const item of branch) {
+          if (item?.json) {
+            if (item.json.model) model = item.json.model;
+            if (item.json.prompt) prompt = item.json.prompt;
+            if (item.json.system_prompt) systemPrompt = item.json.system_prompt;
+          }
+        }
+      }
+    }
+
+    if (!model || !prompt) continue;
+
+    // Find the response text — check code nodes and HTTP nodes for output
+    let responseText = '';
+    for (const sn of subNodes) {
+      if (sn.type === 'n8n-nodes-base.code' && sn.outputData?.main) {
+        for (const branch of sn.outputData.main) {
+          if (!Array.isArray(branch)) continue;
+          for (const item of branch) {
+            if (item?.json) {
+              // Common patterns: llm_response, response, output, result, text
+              const text = item.json.llm_response
+                || item.json.response
+                || item.json.output
+                || item.json.result
+                || item.json.text;
+              if (text && typeof text === 'string') {
+                responseText = text;
+              } else if (text && typeof text === 'object') {
+                responseText = JSON.stringify(text);
+              }
+            }
+          }
+        }
+      }
+      // Also check httpRequest body.agent_response
+      if (sn.type === 'n8n-nodes-base.httpRequest' && sn.outputData?.main) {
+        for (const branch of sn.outputData.main) {
+          if (!Array.isArray(branch)) continue;
+          for (const item of branch) {
+            if (item?.json?.body?.agent_response) {
+              responseText = responseText || item.json.body.agent_response;
+            }
+          }
+        }
+      }
+    }
+
+    // Build input text from prompt + system_prompt
+    const inputText = (systemPrompt || '') + '\n' + prompt;
+
+    // Estimate tokens
+    const inputTokens = estimateTokens(inputText);
+    const outputTokens = estimateTokens(responseText);
+
+    if (inputTokens > 0 || outputTokens > 0) {
+      node.tokenUsage = {
+        model,
+        inputTokens,
+        outputTokens,
+        source: 'estimated',
+      };
+    }
+  }
 }
 
 /**
@@ -339,12 +439,17 @@ async function getExecutionDetail({ executionId }) {
     // Collect sub-workflow execution IDs and their corresponding nodes
     const subFetches = [];
     for (const node of nodes) {
-      if (!node.isSubWorkflow || !node.outputData) continue;
+      if (!node.isSubWorkflow) continue;
 
       let subExecutionId = null;
 
-      // Try to find sub-execution ID from output data items
-      if (node.outputData.main) {
+      // Primary: check node execution metadata (where n8n stores sub-execution info)
+      if (node.metadata?.subExecution?.executionId) {
+        subExecutionId = String(node.metadata.subExecution.executionId);
+      }
+
+      // Fallback: check output data items for executionId field
+      if (!subExecutionId && node.outputData?.main) {
         for (const branch of node.outputData.main) {
           if (!Array.isArray(branch) || subExecutionId) break;
           for (const item of branch) {
@@ -354,11 +459,6 @@ async function getExecutionDetail({ executionId }) {
             }
           }
         }
-      }
-
-      // Fallback: metadata path
-      if (!subExecutionId && node.outputData.metadata?.subExecution?.executionId) {
-        subExecutionId = String(node.outputData.metadata.subExecution.executionId);
       }
 
       if (subExecutionId) {
@@ -394,6 +494,9 @@ async function getExecutionDetail({ executionId }) {
         }
       }
     }
+
+    // Extract token usage from sub-workflows that use HTTP-based LLM calls
+    extractSubWorkflowTokenUsage(nodes);
 
     const tokenSummary = aggregateTokenSummary(nodes);
 
