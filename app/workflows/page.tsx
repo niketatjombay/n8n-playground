@@ -117,7 +117,7 @@ export default function WorkflowsPage() {
         if (!json.success) throw new Error(json.error || 'Unknown error');
         setData(json.data);
       })
-      .catch(err => setError(err.message))
+      .catch(err => setError(err instanceof Error ? err.message : String(err)))
       .finally(() => setLoading(false));
   }, []);
 
@@ -134,8 +134,8 @@ export default function WorkflowsPage() {
       const r = json.data;
       setSyncResult(`Synced — ${r.updated} updated, ${r.archived} archived`);
       fetchData();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setSyncing(false);
     }
