@@ -38,6 +38,23 @@ class N8nClient {
     return this.request('/workflows');
   }
 
+  // List all folders for a project
+  async getFolders(projectId) {
+    const params = new URLSearchParams({ projectId });
+    return this.request(`/folders?${params}`);
+  }
+
+  // Get a single project by ID
+  async getProject(projectId) {
+    return this.request(`/projects/${projectId}`);
+  }
+
+  // List all workflows filtered by project
+  async getWorkflowsByProject(projectId) {
+    const params = new URLSearchParams({ projectId });
+    return this.request(`/workflows?${params}`);
+  }
+
   async getWorkflow(workflowId) {
     return this.request(`/workflows/${workflowId}`);
   }
