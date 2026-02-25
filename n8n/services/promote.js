@@ -9,7 +9,7 @@ const { loadEnv } = require('../lib/env-loader');
 const N8nClient = require('../lib/n8n-client');
 const { remapWorkflow } = require('../lib/env-remap');
 const {
-  readMetadata, getSubWorkflows,
+  getWorkflow, getWorkflowEnv, getSubWorkflows,
   updateWorkflowEnv, updateSubWorkflowEnv,
   findTodoPlaceholders
 } = require('../lib/metadata');
@@ -133,9 +133,10 @@ async function promote({ slug, sourceEnv: srcArg, targetEnv: tgtArg, dryRun = fa
     };
   }
 
-  const meta = readMetadata();
-  const entry = meta[slug];
-  if (!entry) {
+  let entry;
+  try {
+    entry = getWorkflow(slug);
+  } catch {
     return {
       success: false,
       error: `Workflow "${slug}" not found in metadata.json`
@@ -143,22 +144,6 @@ async function promote({ slug, sourceEnv: srcArg, targetEnv: tgtArg, dryRun = fa
   }
 
   const steps = [];
-
-  // Check for TODO placeholders in target env (informational)
-  const todos = findTodoPlaceholders().filter(t =>
-    t.path.startsWith(`${slug}.${targetEnv}`) ||
-    (t.path.startsWith('sub_workflows.') && t.path.includes(`.${targetEnv}.`))
-  );
-  if (todos.length > 0) {
-    steps.push({
-      type: 'info',
-      slug: null,
-      status: 'warning',
-      reason: 'TODO placeholders in target env metadata (will be auto-filled on create)',
-      todos
-    });
-  }
-
   const client = new N8nClient();
 
   // --- Promote shared sub-workflows first ---
@@ -290,8 +275,8 @@ async function promote({ slug, sourceEnv: srcArg, targetEnv: tgtArg, dryRun = fa
     }
 
     if (dryRun) {
-      const freshMeta = readMetadata();
-      const existingMainId = freshMeta[slug]?.[targetEnv]?.n8nId;
+      let existingMainId = null;
+      try { existingMainId = getWorkflowEnv(slug, targetEnv).n8nId; } catch { /* not yet deployed */ }
       steps.push({
         type: 'main',
         slug,
@@ -301,9 +286,9 @@ async function promote({ slug, sourceEnv: srcArg, targetEnv: tgtArg, dryRun = fa
       });
     } else {
       // Deploy — reload metadata for fresh sub-workflow IDs
-      const freshMeta = readMetadata();
-      const existingMainId = freshMeta[slug]?.[targetEnv]?.n8nId;
-      const mainEnvMeta = freshMeta[slug]?.[targetEnv] || {};
+      let existingMainId = null;
+      let mainEnvMeta = {};
+      try { const freshEnv = getWorkflowEnv(slug, targetEnv); existingMainId = freshEnv.n8nId; mainEnvMeta = freshEnv; } catch { /* not yet deployed */ }
       const mainResult = await deployOne(client, tgtMainWf, existingMainId, mainEnvMeta);
 
       // Update metadata

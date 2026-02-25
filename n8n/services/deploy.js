@@ -8,7 +8,8 @@
 const { loadEnv } = require('../lib/env-loader');
 const N8nClient = require('../lib/n8n-client');
 const {
-  readMetadata, listWorkflowSlugs, getSubWorkflows,
+  listWorkflowSlugs, getSubWorkflows,
+  getWorkflow, getWorkflowEnv,
   updateWorkflowEnv, updateSubWorkflowEnv
 } = require('../lib/metadata');
 const fs = require('fs');
@@ -63,7 +64,6 @@ async function deploy({ env, slug = null, dryRun = false }) {
   }
 
   const client = new N8nClient();
-  const meta = readMetadata();
   const steps = [];
 
   // --- Deploy shared sub-workflows first ---
@@ -125,24 +125,15 @@ async function deploy({ env, slug = null, dryRun = false }) {
   const slugs = slug ? [slug] : listWorkflowSlugs();
 
   for (const wfSlug of slugs) {
-    const entry = meta[wfSlug];
-    if (!entry) {
+    let envBlock;
+    try {
+      envBlock = getWorkflowEnv(wfSlug, env);
+    } catch (err) {
       steps.push({
         type: 'main',
         slug: wfSlug,
         status: 'skipped',
-        reason: 'not found in metadata'
-      });
-      continue;
-    }
-
-    const envBlock = entry[env];
-    if (!envBlock) {
-      steps.push({
-        type: 'main',
-        slug: wfSlug,
-        status: 'skipped',
-        reason: `no "${env}" config in metadata`
+        reason: err.message
       });
       continue;
     }

@@ -6,7 +6,7 @@
 
 const { loadEnv } = require('../lib/env-loader');
 const N8nClient = require('../lib/n8n-client');
-const { readMetadata, listWorkflowSlugs, getSubWorkflows } = require('../lib/metadata');
+const { listWorkflowSlugs, getSubWorkflows, getWorkflowEnv } = require('../lib/metadata');
 const fs = require('fs');
 const path = require('path');
 
@@ -24,31 +24,21 @@ async function backup({ env, slug = null }) {
   }
 
   const client = new N8nClient();
-  const meta = readMetadata();
   const steps = [];
 
   // --- Back up main workflows ---
   const slugs = slug ? [slug] : listWorkflowSlugs();
 
   for (const wfSlug of slugs) {
-    const entry = meta[wfSlug];
-    if (!entry) {
+    let envBlock;
+    try {
+      envBlock = getWorkflowEnv(wfSlug, env);
+    } catch (err) {
       steps.push({
         type: 'main',
         slug: wfSlug,
         status: 'skipped',
-        reason: 'not found in metadata'
-      });
-      continue;
-    }
-
-    const envBlock = entry[env];
-    if (!envBlock) {
-      steps.push({
-        type: 'main',
-        slug: wfSlug,
-        status: 'skipped',
-        reason: `no "${env}" config in metadata`
+        reason: err.message
       });
       continue;
     }
