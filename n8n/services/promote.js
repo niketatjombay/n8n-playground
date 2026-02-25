@@ -10,8 +10,7 @@ const N8nClient = require('../lib/n8n-client');
 const { remapWorkflow } = require('../lib/env-remap');
 const {
   getWorkflow, getWorkflowEnv, getSubWorkflows,
-  updateWorkflowEnv, updateSubWorkflowEnv,
-  findTodoPlaceholders
+  updateWorkflowEnv, updateSubWorkflowEnv
 } = require('../lib/metadata');
 const { promotionOrder } = require('../config/environments.config');
 const fs = require('fs');
@@ -288,7 +287,11 @@ async function promote({ slug, sourceEnv: srcArg, targetEnv: tgtArg, dryRun = fa
       // Deploy — reload metadata for fresh sub-workflow IDs
       let existingMainId = null;
       let mainEnvMeta = {};
-      try { const freshEnv = getWorkflowEnv(slug, targetEnv); existingMainId = freshEnv.n8nId; mainEnvMeta = freshEnv; } catch { /* not yet deployed */ }
+      try {
+        const freshEnv = getWorkflowEnv(slug, targetEnv);
+        existingMainId = freshEnv.n8nId;
+        mainEnvMeta = freshEnv;
+      } catch { /* not yet deployed */ }
       const mainResult = await deployOne(client, tgtMainWf, existingMainId, mainEnvMeta);
 
       // Update metadata
