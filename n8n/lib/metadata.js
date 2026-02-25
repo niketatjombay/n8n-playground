@@ -1,11 +1,13 @@
 /**
- * Metadata helper — reads/writes metadata.json and resolves
- * sub-workflow IDs per environment.
+ * Metadata helper — reads/writes metadata.json and resolves workflow data
+ * from the hierarchical folder tree.
  *
- * Structure:
- *   metadata.sub_workflows.<slug>.<env>.n8nId   — shared sub-workflow IDs
- *   metadata.<workflow-slug>.<env>.n8nId         — main workflow IDs
- *   metadata.<workflow-slug>.uses_sub_workflows  — list of sub-workflow slugs used
+ * New structure:
+ *   metadata.project_id / project_name — top-level project info
+ *   metadata.folders[].folders[].folders[].workflows[] — nested tree
+ *   Each workflow entry: { n8nId, slug, type, environment (via parent folder), ... }
+ *
+ * Public API is unchanged from the old flat format so all existing callers work.
  */
 
 const fs = require('fs');
@@ -22,20 +24,74 @@ function writeMetadata(data) {
   fs.writeFileSync(METADATA_PATH, JSON.stringify(data, null, 2) + '\n');
 }
 
+// ---------------------------------------------------------------------------
+// Internal tree traversal helpers
+// ---------------------------------------------------------------------------
+
 /**
- * Get the metadata entry for a main workflow slug (e.g. "case-study-creator").
- * Excludes the top-level "sub_workflows" key.
+ * Collect all workflow entries from the tree as a flat list with context.
+ * Returns: Array<{ entry, env, envFolderId }>
+ */
+function collectAllWorkflows(meta) {
+  const results = [];
+
+  function walk(folders, env) {
+    for (const folder of (folders || [])) {
+      const folderEnv = folder.environment || env;
+      for (const wf of (folder.workflows || [])) {
+        results.push({
+          entry: wf,
+          env: folderEnv,
+          envFolderId: folder.folder_id
+        });
+      }
+      walk(folder.folders, folderEnv);
+    }
+  }
+
+  walk(meta.folders, null);
+  return results;
+}
+
+// ---------------------------------------------------------------------------
+// Public read helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Get the metadata entry for a main workflow slug.
+ * Returns an object matching the old flat format:
+ *   { description, uses_sub_workflows, input, development: {...}, staging: {...}, production: {...} }
  */
 function getWorkflow(slug) {
   const meta = readMetadata();
-  if (slug === 'sub_workflows') {
-    throw new Error('"sub_workflows" is a reserved key, not a workflow slug');
-  }
-  const entry = meta[slug];
-  if (!entry) {
+  const matches = collectAllWorkflows(meta).filter(
+    ({ entry }) => entry.slug === slug && entry.type !== 'sub'
+  );
+
+  if (matches.length === 0) {
     throw new Error(`Workflow "${slug}" not found in metadata.json`);
   }
-  return entry;
+
+  const first = matches[0].entry;
+  const result = {
+    description: first.description || null,
+    uses_sub_workflows: first.uses_sub_workflows || [],
+    input: first.input || null
+  };
+
+  for (const { entry, env, envFolderId } of matches) {
+    if (!env) continue;
+    result[env] = {
+      n8nId: entry.n8nId,
+      project_id: meta.project_id,
+      folder_id: envFolderId,
+      webhookPath: entry.webhookPath || null,
+      active: entry.active || false,
+      lastDeployedAt: entry.lastDeployedAt || null
+    };
+  }
+
+  return result;
 }
 
 /**
@@ -51,11 +107,34 @@ function getWorkflowEnv(slug, env) {
 }
 
 /**
- * Get the top-level sub_workflows section.
+ * Get sub-workflows as an object keyed by slug (old format).
  */
 function getSubWorkflows() {
   const meta = readMetadata();
-  return meta.sub_workflows || {};
+  const subs = collectAllWorkflows(meta).filter(({ entry }) => entry.type === 'sub');
+
+  const result = {};
+  for (const { entry, env, envFolderId } of subs) {
+    if (!result[entry.slug]) {
+      result[entry.slug] = {
+        description: entry.description || null,
+        used_by: entry.used_by || [],
+        api_endpoint: entry.api_endpoint || null,
+        nodes: entry.nodes || [],
+        input: entry.input || null,
+        output: entry.output || null,
+        notes: entry.notes || null
+      };
+    }
+    if (env) {
+      result[entry.slug][env] = {
+        n8nId: entry.n8nId,
+        project_id: meta.project_id,
+        folder_id: envFolderId
+      };
+    }
+  }
+  return result;
 }
 
 /**
@@ -72,7 +151,6 @@ function getSubWorkflow(subSlug) {
 
 /**
  * Resolve the n8n ID for a sub-workflow in a given environment.
- * Returns the n8nId string or null if not found / still a TODO placeholder.
  */
 function resolveSubWorkflowId(subSlug, env) {
   const sub = getSubWorkflow(subSlug);
@@ -83,9 +161,7 @@ function resolveSubWorkflowId(subSlug, env) {
 }
 
 /**
- * Build a map of source-env sub-workflow n8n IDs → target-env n8n IDs.
- * Considers all sub-workflows referenced by a given main workflow slug.
- * Used by env-remap to swap IDs in executeWorkflow nodes.
+ * Build source->target sub-workflow ID map for env remapping.
  */
 function buildSubWorkflowIdMap(slug, sourceEnv, targetEnv) {
   const entry = getWorkflow(slug);
@@ -96,7 +172,6 @@ function buildSubWorkflowIdMap(slug, sourceEnv, targetEnv) {
   for (const subSlug of subSlugs) {
     const sub = allSubs[subSlug];
     if (!sub) continue;
-
     const srcId = sub[sourceEnv]?.n8nId;
     const tgtId = sub[targetEnv]?.n8nId;
     if (srcId && tgtId && !tgtId.startsWith('TODO')) {
@@ -107,52 +182,95 @@ function buildSubWorkflowIdMap(slug, sourceEnv, targetEnv) {
 }
 
 /**
- * Update a specific field in a main workflow's env block and persist.
- */
-function updateWorkflowEnv(slug, env, updates) {
-  const meta = readMetadata();
-  if (!meta[slug]) {
-    throw new Error(`Workflow "${slug}" not found in metadata.json`);
-  }
-  if (!meta[slug][env]) {
-    meta[slug][env] = {};
-  }
-  Object.assign(meta[slug][env], updates);
-  writeMetadata(meta);
-}
-
-/**
- * Update a specific field in a sub-workflow's env block and persist.
- */
-function updateSubWorkflowEnv(subSlug, env, updates) {
-  const meta = readMetadata();
-  if (!meta.sub_workflows?.[subSlug]) {
-    throw new Error(`Sub-workflow "${subSlug}" not found in metadata.json`);
-  }
-  if (!meta.sub_workflows[subSlug][env]) {
-    meta.sub_workflows[subSlug][env] = {};
-  }
-  Object.assign(meta.sub_workflows[subSlug][env], updates);
-  writeMetadata(meta);
-}
-
-/**
- * Return all main workflow slugs (excludes "sub_workflows" key).
+ * List all main workflow slugs (non-sub, non-archived).
  */
 function listWorkflowSlugs() {
   const meta = readMetadata();
-  return Object.keys(meta).filter(k => k !== 'sub_workflows');
+  const seen = new Set();
+  for (const { entry } of collectAllWorkflows(meta)) {
+    if (entry.type !== 'sub' && !entry.archived && entry.slug) {
+      seen.add(entry.slug);
+    }
+  }
+  return [...seen];
 }
 
 /**
- * Return all sub-workflow slugs.
+ * List all sub-workflow slugs.
  */
 function listSubWorkflowSlugs() {
   return Object.keys(getSubWorkflows());
 }
 
 /**
- * Check metadata for any remaining TODO placeholders and return them.
+ * Return the full folder tree (new helper used by the UI and list-workflows service).
+ */
+function getFolderTree() {
+  return readMetadata().folders || [];
+}
+
+// ---------------------------------------------------------------------------
+// Public write helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Update fields in a main workflow's env entry and persist.
+ */
+function updateWorkflowEnv(slug, env, updates) {
+  const meta = readMetadata();
+  let found = false;
+
+  function walk(folders) {
+    for (const folder of (folders || [])) {
+      if (folder.environment === env) {
+        for (const wf of (folder.workflows || [])) {
+          if (wf.slug === slug && wf.type !== 'sub') {
+            Object.assign(wf, updates);
+            found = true;
+            return;
+          }
+        }
+      }
+      walk(folder.folders);
+      if (found) return;
+    }
+  }
+
+  walk(meta.folders);
+  if (!found) throw new Error(`Workflow "${slug}" not found for env "${env}"`);
+  writeMetadata(meta);
+}
+
+/**
+ * Update fields in a sub-workflow's env entry and persist.
+ */
+function updateSubWorkflowEnv(subSlug, env, updates) {
+  const meta = readMetadata();
+  let found = false;
+
+  function walk(folders) {
+    for (const folder of (folders || [])) {
+      if (folder.environment === env) {
+        for (const wf of (folder.workflows || [])) {
+          if (wf.slug === subSlug && wf.type === 'sub') {
+            Object.assign(wf, updates);
+            found = true;
+            return;
+          }
+        }
+      }
+      walk(folder.folders);
+      if (found) return;
+    }
+  }
+
+  walk(meta.folders);
+  if (!found) throw new Error(`Sub-workflow "${subSlug}" not found for env "${env}"`);
+  writeMetadata(meta);
+}
+
+/**
+ * Check metadata for any remaining TODO placeholders.
  */
 function findTodoPlaceholders() {
   const meta = readMetadata();
@@ -185,5 +303,6 @@ module.exports = {
   updateSubWorkflowEnv,
   listWorkflowSlugs,
   listSubWorkflowSlugs,
+  getFolderTree,
   findTodoPlaceholders
 };

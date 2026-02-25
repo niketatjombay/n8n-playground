@@ -5,7 +5,7 @@
  */
 
 const {
-  readMetadata, listWorkflowSlugs, getSubWorkflows, findTodoPlaceholders
+  listWorkflowSlugs, getWorkflow, getSubWorkflows, findTodoPlaceholders
 } = require('../lib/metadata');
 const { promotionOrder } = require('../config/environments.config');
 
@@ -21,8 +21,6 @@ const { promotionOrder } = require('../config/environments.config');
  * }}
  */
 function getStatus(slugFilter = null) {
-  const meta = readMetadata();
-
   // --- Shared sub-workflows ---
   const allSubs = getSubWorkflows();
   const subWorkflows = Object.entries(allSubs).map(([subSlug, sub]) => {
@@ -56,8 +54,12 @@ function getStatus(slugFilter = null) {
   const workflows = [];
 
   for (const slug of slugs) {
-    const entry = meta[slug];
-    if (!entry) continue;
+    let entry;
+    try {
+      entry = getWorkflow(slug);
+    } catch (e) {
+      continue;
+    }
 
     const environments = {};
     for (const env of promotionOrder) {
