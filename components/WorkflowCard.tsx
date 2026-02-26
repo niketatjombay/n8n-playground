@@ -25,6 +25,7 @@ interface WorkflowData {
 interface WorkflowCardProps {
   workflow: WorkflowData;
   envList: string[];
+  instancesByEnv?: Record<string, string | null>;
   onStatusChange?: () => void;
 }
 
@@ -43,7 +44,7 @@ function relativeTime(dateStr: string): string {
   return 'just now';
 }
 
-export default function WorkflowCard({ workflow, envList, onStatusChange }: WorkflowCardProps) {
+export default function WorkflowCard({ workflow, envList, instancesByEnv = {}, onStatusChange }: WorkflowCardProps) {
   const [togglingEnv, setTogglingEnv] = useState<string | null>(null);
 
   const handleToggle = async (env: string, active: boolean) => {
@@ -87,9 +88,14 @@ export default function WorkflowCard({ workflow, envList, onStatusChange }: Work
               </div>
             );
           }
+          const instanceUrl = instancesByEnv[env];
+          const instanceHost = instanceUrl ? (() => { try { return new URL(instanceUrl).host; } catch { return null; } })() : null;
           return (
             <div key={env} className="flex items-center gap-3 flex-wrap">
               <EnvironmentBadge env={env} active={envData.active} />
+              {instanceHost && (
+                <span className="text-xs text-zinc-600 font-mono">{instanceHost}</span>
+              )}
               <span className="text-xs font-mono text-zinc-500">
                 {envData.isTodo
                   ? envData.n8nId

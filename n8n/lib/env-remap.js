@@ -11,7 +11,7 @@
  * LLM URL (agentcoreapi.jombay.com) is identical across envs — no remapping.
  */
 
-const { environments } = require('../config/environments.config');
+const { environments, getEnvironmentConfig } = require('../config/environments.config');
 const { buildSubWorkflowIdMap, getWorkflowEnv } = require('./metadata');
 
 /**
@@ -24,8 +24,8 @@ const { buildSubWorkflowIdMap, getWorkflowEnv } = require('./metadata');
  * @returns {object} remapped workflow (new object, original untouched)
  */
 function remapWorkflow(workflow, slug, sourceEnv, targetEnv) {
-  const srcCfg = environments[sourceEnv];
-  const tgtCfg = environments[targetEnv];
+  const srcCfg = getEnvironmentConfig(sourceEnv);
+  const tgtCfg = getEnvironmentConfig(targetEnv);
 
   if (!srcCfg) throw new Error(`Unknown source environment: ${sourceEnv}`);
   if (!tgtCfg) throw new Error(`Unknown target environment: ${targetEnv}`);

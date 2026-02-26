@@ -20,6 +20,7 @@ interface StatusData {
   }>;
   todos: Array<{ path: string; value: string }>;
   environments: string[];
+  instancesByEnv: Record<string, string | null>;
 }
 
 export default function DashboardPage() {
@@ -141,6 +142,7 @@ export default function DashboardPage() {
               key={wf.slug}
               workflow={wf as any}
               envList={data.environments}
+              instancesByEnv={data.instancesByEnv}
               onStatusChange={fetchData}
             />
           ))}

@@ -15,8 +15,8 @@
 const { loadEnv } = require('../lib/env-loader');
 loadEnv();
 
-const N8nClient = require('../lib/n8n-client');
-const { readMetadata, listWorkflowSlugs, getSubWorkflows } = require('../lib/metadata');
+const { clientForEnv } = require('../lib/client-for-env');
+const { listWorkflowSlugs, getWorkflowEnv, getSubWorkflows } = require('../lib/metadata');
 const fs = require('fs');
 const path = require('path');
 
@@ -31,29 +31,23 @@ function getFlagValue(flag) {
 
 async function backupWorkflows() {
   try {
-    const client = new N8nClient();
-
     if (!envFlag) {
-      await legacyBackup(client);
+      await legacyBackup(clientForEnv('development'));
       return;
     }
 
     console.log(`Backing up workflows for environment: ${envFlag}\n`);
 
-    const meta = readMetadata();
+    const client = clientForEnv(envFlag);
     const slugs = slugFlag ? [slugFlag] : listWorkflowSlugs();
 
     // Back up main workflows
     for (const slug of slugs) {
-      const entry = meta[slug];
-      if (!entry) {
-        console.warn(`Workflow "${slug}" not found in metadata.json — skipping`);
-        continue;
-      }
-
-      const envBlock = entry[envFlag];
-      if (!envBlock) {
-        console.warn(`No "${envFlag}" config for "${slug}" — skipping`);
+      let envBlock;
+      try {
+        envBlock = getWorkflowEnv(slug, envFlag);
+      } catch (err) {
+        console.warn(`Workflow "${slug}" not found for ${envFlag} — skipping`);
         continue;
       }
 

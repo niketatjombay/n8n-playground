@@ -1,109 +1,179 @@
-// 8.1_JS_Assemble — v2: Final output assembly
-// Input: $input = 7.6_JS_MergeScripts (facilitator scripts)
-// Reads via $(): 6.1_JS_Merge (slide content), 3.3_JS_ParseAgent1A (blueprint),
-//   7.2_SUB_Agent3 (QC review), 1.2_PREP_Input (validated input)
+// 8.1_JS_Assemble — Final output assembly (tab-based)
+// Reads all upstream normalizers + input, builds structured output.
+// Each slide has 4 tabs: content, facilitator, framework, gamma_details.
 
 const scriptMerge = $input.first().json;
-const contentMerge = $('6.1_JS_Merge').first().json;
-const agent1 = $('3.3_JS_ParseAgent1A').first().json.agent1_output;
+const contentMerge = $('6.4_JS_NormContent').first().json;
+const agent1 = $('3.6_JS_NormBP').first().json.agent1_output || {};
 const validatedInput = $('1.2_PREP_Input').first().json;
+const agent3 = $('7.1h_JS_NormQC').first().json;
+const kbData = $('2.7_JS_ParseKB').first().json;
+const tagData = $('2.10_JS_ParseTags').first().json;
 
-// QC review — Agent 3 output (accessed via $() not $input)
-const agent3Raw = $('7.2_SUB_Agent3').first().json;
-const agent3 = agent3Raw.llm_response || agent3Raw;
+// Read outline alignment for outline_ref and outline_topic
+let outlineAlignment = {};
+try {
+  outlineAlignment = $('2.0d_JS_AlignOutline').first().json.outline_alignment || {};
+} catch(e) { outlineAlignment = {}; }
 
-const slideSpec = contentMerge.slide_spec || {};
+const rawSlideSpec = contentMerge.slide_spec || {};
 const facilitatorScript = scriptMerge.facilitator_script || {};
-const slideTemplate = validatedInput.slide_template || {};
 const sessionConstraints = validatedInput.session_constraints || {};
+const sessionOverview = agent1.session_overview || {};
+const contentTags = (tagData.content_tags || {});
+const kbResults = kbData.kb_results || [];
 
-// Embed Agent 3 QC flags into slide_spec reviewer_flags
+// Build a lookup: content_unit_id → KB result object (for sources)
+const kbLookup = {};
+for (const kb of kbResults) {
+  const id = kb.content_unit_id || kb.id || '';
+  if (id) kbLookup[id] = kb;
+}
+
+// Backfill missing slides from blueprint
+const slideBlueprint = agent1.slide_blueprint || {};
+for (const [key, bp] of Object.entries(slideBlueprint)) {
+  if (!rawSlideSpec[key] && bp && typeof bp === 'object') {
+    rawSlideSpec[key] = {
+      slide_number: bp.slide_number,
+      slide_type: bp.slide_type || bp.type || '',
+      title: bp.title || '',
+      headline: bp.title || '',
+      gagne: bp.gagne || null,
+      kolb: bp.kolb || null,
+      ages: bp.ages || null,
+      timing_minutes: bp.timing_minutes || 0,
+      provenance: 'Blueprint',
+      _generation_failed: true
+    };
+  }
+}
+
+// Embed QC reviewer_flags into slide data
 const slideReviews = agent3.slide_reviews || {};
 for (const [slideId, review] of Object.entries(slideReviews)) {
-  const slideKey = slideId.startsWith('slide_') ? slideId : 'slide_' + slideId;
-  const flags = review.flags || [];
-  if (slideSpec[slideKey] && flags.length > 0) {
-    if (!Array.isArray(slideSpec[slideKey].reviewer_flags)) {
-      slideSpec[slideKey].reviewer_flags = [];
+  const key = slideId.startsWith('slide_') ? slideId : 'slide_' + slideId;
+  const flags = (review && review.flags) || [];
+  if (rawSlideSpec[key] && flags.length > 0) {
+    if (!Array.isArray(rawSlideSpec[key].reviewer_flags)) rawSlideSpec[key].reviewer_flags = [];
+    rawSlideSpec[key].reviewer_flags.push(...flags);
+  }
+}
+
+// --- Field classification sets ---
+const FACILITATOR_FIELDS = new Set([
+  'facilitator_script', 'facilitator_notes', 'facilitator_instruction',
+  'facilitator_prompt', 'talking_points', 'debrief_questions',
+  'speaker_notes', 'trainer_notes'
+]);
+
+const FRAMEWORK_FIELDS = new Set([
+  'gagne', 'kolb', 'ages',
+  'provenance', 'provenance_source',
+  'reviewer_flags', 'mandatory_frameworks_used',
+  'flags', 'sensitivity_flags'
+]);
+
+const GAMMA_FIELDS = new Set([
+  'visual_guidance', 'visual_direction', 'visual_cues', 'visual_elements',
+  'layout_recommendation', 'graphic_notes', 'color_cues',
+  'slide_dimensions', 'visual'
+]);
+
+// These fields go to the slide root level, not into any tab
+const ROOT_FIELDS = new Set([
+  'slide_number', 'outline_ref', 'outline_topic'
+]);
+
+// --- Build tab-structured slides ---
+const slides = {};
+
+for (const [key, rawSlide] of Object.entries(rawSlideSpec)) {
+  if (!/^slide_\d+$/.test(key)) continue;
+
+  const alignment = outlineAlignment[key] || {};
+  const slideScript = facilitatorScript[key] || {};
+  const slideTags = contentTags[key] || {};
+  const kbUnitIds = slideTags.kb_units || [];
+
+  // Build sources array from KB mapping
+  const sources = [];
+  for (const unitId of kbUnitIds) {
+    const kb = kbLookup[unitId];
+    if (kb) {
+      sources.push({
+        content_unit_id: kb.content_unit_id || kb.id || unitId,
+        title: kb.title || '',
+        content_type: kb.content_type || '',
+        document_url: kb.document_url || ''
+      });
     }
-    slideSpec[slideKey].reviewer_flags.push(...flags);
+  }
+
+  // Classify raw slide fields into tabs
+  const content = {};
+  const facilitator = {};
+  const framework = {};
+  const gamma_details = {};
+
+  for (const [field, value] of Object.entries(rawSlide)) {
+    if (ROOT_FIELDS.has(field)) continue;
+    if (field === 'slide_number') continue;
+
+    if (FACILITATOR_FIELDS.has(field)) {
+      facilitator[field] = value;
+    } else if (FRAMEWORK_FIELDS.has(field)) {
+      framework[field] = value;
+    } else if (GAMMA_FIELDS.has(field)) {
+      gamma_details[field] = value;
+    } else {
+      content[field] = value;
+    }
+  }
+
+  // Merge facilitator_script data from separate merge node
+  if (typeof slideScript === 'object' && slideScript !== null) {
+    for (const [field, value] of Object.entries(slideScript)) {
+      if (field === 'slide_number' || field === 'slide_ref' || field === 'slide_id') continue;
+      facilitator[field] = value;
+    }
+  }
+
+  // Add sources to content
+  content.sources = sources;
+
+  slides[key] = {
+    slide_number: rawSlide.slide_number || parseInt(key.replace('slide_', ''), 10),
+    outline_ref: alignment.outline_section || '',
+    outline_topic: alignment.outline_section || '',
+    content,
+    facilitator,
+    framework,
+    gamma_details
+  };
+}
+
+// Build slide_mapping for knowledge_bank
+const slideMapping = {};
+for (const [key, tags] of Object.entries(contentTags)) {
+  if (/^slide_\d+$/.test(key) && tags.kb_units && tags.kb_units.length > 0) {
+    slideMapping[key] = tags.kb_units;
   }
 }
 
-// --- Final validation pass (belt-and-suspenders after merge normalization) ---
-for (let i = 1; i <= 17; i++) {
-  const key = `slide_${i}`;
-  const tmpl = slideTemplate[key] || {};
+const totalSlides = Object.keys(slides).length;
 
-  // Ensure slide_spec entry exists with canonical keys
-  if (!slideSpec[key]) {
-    slideSpec[key] = { slide_number: key, slide_type: tmpl.type || '', headline: '', subtext: '', bullets: [], visual_guidance: '', key_message: '', reviewer_flags: [] };
-  } else {
-    const slide = slideSpec[key];
-    if (!slide.slide_number) slide.slide_number = key;
-    if (!slide.slide_type) slide.slide_type = tmpl.type || '';
-    if (!slide.headline) slide.headline = slide.slide_title || slide.title || '';
-    if (!Array.isArray(slide.reviewer_flags)) slide.reviewer_flags = [];
-  }
-
-  // Ensure facilitator_script entry exists with canonical keys
-  if (!facilitatorScript[key]) {
-    facilitatorScript[key] = { facilitator_script: '', visual_guidance: '', energy_note: '', modality_notes: { virtual: '', in_person: '' }, debrief_questions: [], activity_run_of_show: null };
-  } else {
-    const script = facilitatorScript[key];
-    if (typeof script.facilitator_script !== 'string') script.facilitator_script = '';
-  }
-}
-
-// Build provenance log from slide_spec
-const provenanceLog = [];
-for (let i = 1; i <= 17; i++) {
-  const key = `slide_${i}`;
-  const slide = slideSpec[key] || {};
-  provenanceLog.push({
-    slide_id: String(i),
-    slide_type: (slideTemplate[key] || {}).type || '',
-    provenance: slide.provenance || 'New',
-    source: slide.provenance_source || '',
-    rationale: slide.provenance_rationale || ''
-  });
-}
-
-// Build Gagné map from deterministic slide_template
-const gagneMap = {};
-for (let i = 1; i <= 17; i++) {
-  const key = `slide_${i}`;
-  const tmpl = slideTemplate[key] || {};
-  if (tmpl.gagne) {
-    const eventKey = tmpl.gagne.toLowerCase().replace(/\s+/g, '_').replace(/'/g, '');
-    if (!gagneMap[eventKey]) gagneMap[eventKey] = [];
-    gagneMap[eventKey].push(String(i));
-  }
-}
-
-// Build Kolb map from deterministic slide_template
-const kolbMap = {};
-for (let i = 1; i <= 17; i++) {
-  const key = `slide_${i}`;
-  const tmpl = slideTemplate[key] || {};
-  if (tmpl.kolb) {
-    kolbMap[tmpl.kolb] = String(i);
-  }
-}
-
-// Session overview from blueprint
-const sessionOverview = agent1.session_overview || {};
-
-// Assemble final output
 const finalOutput = {
   metadata: {
-    project_name: validatedInput.project_details.name || '',
-    client_name: validatedInput.client_name,
+    project_name: (validatedInput.project_details || {}).name || '',
+    client_name: validatedInput.client_name || '',
     session_type: sessionConstraints.sessionType || sessionConstraints.session_type || '',
     total_duration: sessionConstraints.totalDuration || sessionConstraints.total_duration || '',
-    total_slides: 17,
+    total_slides: totalSlides,
     generated_date: new Date().toISOString().split('T')[0],
-    overall_confidence: agent3.review_summary?.overall_quality || 'Medium',
+    overall_confidence: (agent3.review_summary || {}).overall_quality || 'Medium',
+    run_id: validatedInput.run_id || $execution.id,
+    input_hash: validatedInput.input_hash || '',
     n8n_workflow_execution_id: $execution.id,
     n8n_workflow_execution_url: 'https://workflows.ur-nl.com/executions/' + $execution.id
   },
@@ -113,16 +183,19 @@ const finalOutput = {
     learning_objectives: sessionOverview.learning_objectives || [],
     audience_summary: sessionOverview.audience_summary || '',
     session_arc_narrative: sessionOverview.session_arc_narrative || '',
-    gagne_map: gagneMap,
-    kolb_map: kolbMap
+    application_moments: sessionOverview.application_moments || [],
+    gagne_map: sessionOverview.gagne_map || {},
+    kolb_map: sessionOverview.kolb_map || {}
   },
-  slide_spec: slideSpec,
-  facilitator_script: facilitatorScript,
+  slides: slides,
   mandatory_jombay_frameworks: agent1.mandatory_jombay_frameworks || [],
-  sensitivity_log: agent1.sensitivity_log || [],
-  checklist_compliance: agent3.checklist_compliance || { gagne_coverage: '', kolb_coverage: '', provenance_coverage: '' },
-  attention_items: agent3.attention_items || [],
-  provenance_log: provenanceLog
+  checklist_compliance: agent3.checklist_compliance || {},
+  knowledge_bank: {
+    kb_results: kbResults,
+    kb_result_count: kbResults.length,
+    slide_mapping: slideMapping,
+    stats: tagData.stats || {}
+  }
 };
 
 return [{ json: {

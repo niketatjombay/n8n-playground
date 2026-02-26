@@ -77,6 +77,23 @@ for (const field of KEEP_FIELDS) {
 // STEP 4: EXTRACT PRE-WORK METADATA (for KB search in step 4)
 // ============================================================
 
+// Helper: extract readable summary from slide bullets
+function buildSlideSummary(slide) {
+  const bullets = slide.bullets || {};
+  const parts = [];
+  for (const [k, v] of Object.entries(bullets)) {
+    if (typeof v === 'string') parts.push(k + ': ' + v);
+    else if (Array.isArray(v)) parts.push(k + ': ' + v.join('; '));
+    else if (typeof v === 'object' && v !== null) {
+      for (const [sk, sv] of Object.entries(v)) {
+        if (typeof sv === 'string') parts.push(sk + ': ' + sv);
+        else if (Array.isArray(sv)) parts.push(sk + ': ' + sv.join('; '));
+      }
+    }
+  }
+  return parts.join(' | ').substring(0, 500);
+}
+
 const competencies = [];
 const developmentThemes = [];
 const slideSummary = [];
@@ -93,7 +110,8 @@ for (const key of slideKeys) {
     title: slide.slide_title || '',
     template_ref: String(slide.template_reference || ''),
     confidence: slide.confidence || '',
-    size_chars: JSON.stringify(slide).length
+    size_chars: JSON.stringify(slide).length,
+    summary: buildSlideSummary(slide)
   });
 
   const bullets = slide.bullets || {};
@@ -161,6 +179,32 @@ const slideTemplate = {
 };
 
 // ============================================================
+// STEP 6: GENERATE RUN ID + INPUT HASH
+// ============================================================
+
+// run_id: unique per execution
+const run_id = $execution.id;
+
+// input_hash: deterministic hash of key inputs for duplicate detection
+// Uses: client_name + project_id + content_outline_url + pre_work slide count + session_constraints
+const hashInput = JSON.stringify({
+  client_name: clientName,
+  project_id: body.project_id || '',
+  content_outline_url: contentOutlineUrl || documentsUrls,
+  pre_work_slide_count: slideKeys.length,
+  session_type: sessionConstraints.sessionType || sessionConstraints.session_type || '',
+  total_duration: sessionConstraints.totalDuration || sessionConstraints.total_duration || ''
+});
+
+// Simple string hash (djb2) — sufficient for duplicate detection, no crypto needed
+let hash = 5381;
+for (let i = 0; i < hashInput.length; i++) {
+  hash = ((hash << 5) + hash) + hashInput.charCodeAt(i);
+  hash = hash & hash; // Convert to 32-bit integer
+}
+const input_hash = Math.abs(hash).toString(36);
+
+// ============================================================
 // OUTPUT
 // ============================================================
 
@@ -198,6 +242,11 @@ return [{ json: {
   memory_id: body.memory_id || '',
   knowledge_base_id: body.knowledge_base_id || inputJson.knowledge_base_id || 'Q6OYS6AUC8',
 
+  // Run tracking
+  run_id: run_id,
+  input_hash: input_hash,
+
   // Deterministic slide template
   slide_template: slideTemplate
 }}];
+// test comment

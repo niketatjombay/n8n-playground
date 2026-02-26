@@ -1,0 +1,1468 @@
+{
+  "name": "[PROD] Google Drive Utils (Sub-Workflow)",
+  "description": null,
+  "active": true,
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        -2624,
+        424
+      ],
+      "id": "41314560-5a45-4b7c-b12e-0fb153d55cab",
+      "name": "TRG_Start",
+      "notes": "Entry point for sub-workflow. Receives input from parent workflow's Execute Workflow node."
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * Input Validation & Normalization\n * Returns normalized input + validation errors\n */\n\nconst input = $input.first().json;\nconst errors = [];\n\n// Extract and validate mode\nconst mode = (input.mode || \"\").trim().toUpperCase();\nif (!mode) {\n  errors.push({ stage: \"input\", message: \"Missing required parameter: mode\" });\n}\nif (mode !== \"EXTRACT_CONTENT\" && mode !== \"CREATE_FILE\") {\n  errors.push({ stage: \"input\", message: `Invalid mode: ${mode}. Must be EXTRACT_CONTENT or CREATE_FILE` });\n}\n\n// Initialize output object\nconst output = {\n  mode: mode,\n  validation_errors: errors,\n  timestamp: new Date().toISOString()\n};\n\n// ========== MODE: EXTRACT_CONTENT ==========\nif (mode === \"EXTRACT_CONTENT\") {\n  const url = (input.google_drive_file_url || \"\").trim();\n  \n  if (!url) {\n    errors.push({ stage: \"input\", message: \"Missing required parameter: google_drive_file_url\" });\n  } else {\n    // Extract file ID from Google Drive URL\n    let fileId = \"\";\n    try {\n      // Handle different Google Drive URL formats:\n      // https://drive.google.com/file/d/FILE_ID/view\n      // https://docs.google.com/document/d/FILE_ID/edit\n      // https://docs.google.com/presentation/d/FILE_ID/edit\n      // https://docs.google.com/spreadsheets/d/FILE_ID/edit\n      \n      const patterns = [\n        /\\/d\\/([a-zA-Z0-9_-]+)/,  // /d/FILE_ID\n        /id=([a-zA-Z0-9_-]+)/     // id=FILE_ID\n      ];\n      \n      for (const pattern of patterns) {\n        const match = url.match(pattern);\n        if (match) {\n          fileId = match[1];\n          break;\n        }\n      }\n      \n      if (!fileId) {\n        errors.push({ stage: \"input\", message: \"Could not extract file ID from URL\" });\n      }\n    } catch (e) {\n      errors.push({ stage: \"input\", message: `URL parsing error: ${e.message}` });\n    }\n    \n    output.google_drive_file_url = url;\n    output.file_id = fileId;\n  }\n}\n\n// ========== MODE: CREATE_FILE ==========\nif (mode === \"CREATE_FILE\") {\n  const folderId = (input.google_drive_folder_id || \"\").trim();\n  const docType = (input.document_type || \"\").trim().toLowerCase();\n  const templateUrl = (input.reference_template_url || \"\").trim();\n  const inputJson = input.input_json;\n  \n  if (!folderId) {\n    errors.push({ stage: \"input\", message: \"Missing required parameter: google_drive_folder_id\" });\n  }\n  \n  if (!docType) {\n    errors.push({ stage: \"input\", message: \"Missing required parameter: document_type\" });\n  } else if (![\"google_doc\", \"google_slides\", \"google_sheet\"].includes(docType)) {\n    errors.push({ \n      stage: \"input\", \n      message: `Invalid document_type: ${docType}. Must be google_doc, google_slides, or google_sheet` \n    });\n  }\n  \n  if (!inputJson) {\n    errors.push({ stage: \"input\", message: \"Missing required parameter: input_json\" });\n  } else if (typeof inputJson !== \"object\") {\n    errors.push({ stage: \"input\", message: \"input_json must be a valid object\" });\n  }\n  \n  output.google_drive_folder_id = folderId;\n  output.document_type = docType;\n  output.reference_template_url = templateUrl || null;\n  output.input_json = inputJson;\n  \n  // Extract template file ID if provided\n  if (templateUrl) {\n    try {\n      const patterns = [\n        /\\/d\\/([a-zA-Z0-9_-]+)/,\n        /id=([a-zA-Z0-9_-]+)/\n      ];\n      \n      let templateId = \"\";\n      for (const pattern of patterns) {\n        const match = templateUrl.match(pattern);\n        if (match) {\n          templateId = match[1];\n          break;\n        }\n      }\n      \n      output.template_file_id = templateId || null;\n    } catch (e) {\n      errors.push({ stage: \"input\", message: `Template URL parsing error: ${e.message}` });\n    }\n  }\n}\n\n// Return with validation status\noutput.validation_status = errors.length === 0 ? \"valid\" : \"invalid\";\noutput.validation_errors = errors;\n\nreturn [output];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2400,
+        424
+      ],
+      "id": "c96b5b17-8c33-465f-9c3d-205ca09458e1",
+      "name": "INP_ValidateAndRoute",
+      "notes": "Validates input parameters, normalizes structure, and adds metadata for routing."
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.validation_status }}",
+                    "rightValue": "invalid",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "validation_error"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.mode }}",
+                    "rightValue": "EXTRACT_CONTENT",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "extract_content"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.mode }}",
+                    "rightValue": "CREATE_FILE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "create_file"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -2176,
+        408
+      ],
+      "id": "013b98b7-f178-4cfc-874d-cef30aebb807",
+      "name": "SW_ModeRouter",
+      "notes": "Routes workflow based on mode (EXTRACT_CONTENT or CREATE_FILE). First checks validation status."
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\n\nreturn [{\n  status: \"error\",\n  mode: input.mode || \"unknown\",\n  data: {},\n  errors: input.validation_errors || []\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -832,
+        -128
+      ],
+      "id": "1db48d4f-c2c9-4369-aa79-fa6e0d9c1029",
+      "name": "ERR_PackValidationError",
+      "notes": "Packages validation errors into standard output format"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.google_drive_file_url }}",
+          "mode": "url"
+        },
+        "options": {
+          "binaryPropertyName": "file",
+          "googleFileConversion": {
+            "conversion": {
+              "docsToFormat": "application/pdf",
+              "slidesToFormat": "application/pdf",
+              "sheetsToFormat": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -1728,
+        424
+      ],
+      "id": "2a220496-18f9-47f4-8eba-752f06dea7f8",
+      "name": "GD_DownloadFile",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "jk6snVCfAJTaBJyS",
+          "name": "Test User Google Drive Account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Downloads file from Google Drive. Converts Google Docs/Slides to PDF, Sheets to XLSX."
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst prevData = $('INP_ValidateAndRoute').first().json;\n\nconst errorMessage = input.error?.message || input.error || \"Download failed\";\n\nreturn [{\n  status: \"error\",\n  mode: \"EXTRACT_CONTENT\",\n  data: {\n    source_url: prevData.google_drive_file_url || \"\",\n    file_name: \"\",\n    mimeType: \"\",\n    extracted_text: \"\",\n    extraction_method: \"\",\n    char_count: 0\n  },\n  errors: [\n    {\n      stage: \"download\",\n      message: errorMessage\n    }\n  ]\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -832,
+        64
+      ],
+      "id": "b82f91f4-b226-4d78-9958-173370397637",
+      "name": "ERR_PackDownloadError",
+      "notes": "Packages download error into standard error format for final output."
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $binary.file.mimeType }}",
+                    "rightValue": "application/pdf",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "pdf"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $binary.file.mimeType }}",
+                    "rightValue": "text",
+                    "operator": {
+                      "type": "string",
+                      "operation": "startsWith"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "text"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $binary.file.mimeType }}",
+                    "rightValue": "application/msword",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "doc"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $binary.file.mimeType }}",
+                    "rightValue": "text/csv",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "csv"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $binary.file.mimeType }}",
+                    "rightValue": "application/vnd.ms-excel",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "xls"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $binary.file.mimeType }}",
+                    "rightValue": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "xlsx"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -1280,
+        728
+      ],
+      "id": "f747b4cc-9255-4df4-a74a-f0207415d7ce",
+      "name": "SW_MimeTypeRouter",
+      "notes": "Routes file to appropriate extraction node based on MIME type detected from binary data."
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "file",
+        "options": {
+          "joinPages": true,
+          "keepSource": "json"
+        }
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -1056,
+        232
+      ],
+      "id": "133d39fe-7de8-43dd-9582-f1f11e8002b8",
+      "name": "XTR_FromPDF",
+      "notes": "Extracts text from PDF files using OCR and text extraction. Joins all pages into single text."
+    },
+    {
+      "parameters": {
+        "operation": "text",
+        "binaryPropertyName": "file",
+        "destinationKey": "text",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -1056,
+        424
+      ],
+      "id": "6fcfd555-fe85-46f3-b993-2e6e791ef35c",
+      "name": "XTR_FromText",
+      "notes": "Extracts text from plain text and markdown files. Preserves formatting."
+    },
+    {
+      "parameters": {
+        "operation": "ods",
+        "binaryPropertyName": "file",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -1056,
+        616
+      ],
+      "id": "ad5d99c7-36fa-4965-bf32-e58a58c48551",
+      "name": "XTR_FromDoc",
+      "notes": "Extracts text from Microsoft Word documents (.doc, .docx)."
+    },
+    {
+      "parameters": {
+        "binaryPropertyName": "file",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -1056,
+        808
+      ],
+      "id": "ed54193a-ca6e-4ed0-b1de-693c7a675b96",
+      "name": "XTR_FromCSV",
+      "notes": "Extracts structured data from CSV files. Converts to JSON array."
+    },
+    {
+      "parameters": {
+        "operation": "xls",
+        "binaryPropertyName": "file",
+        "options": {
+          "readAsString": false
+        }
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -1056,
+        1000
+      ],
+      "id": "c51eda6b-8043-4df4-bc7c-0ab6d0b82f1d",
+      "name": "XTR_FromXLS",
+      "notes": "Extracts data from legacy Excel files (.xls). Converts to structured data."
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "binaryPropertyName": "file",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -1056,
+        1192
+      ],
+      "id": "fe36fdaa-f93e-4eed-bb40-37073ba68ec4",
+      "name": "XTR_FromXLSX",
+      "notes": "Extracts data from modern Excel files (.xlsx). Converts to structured data."
+    },
+    {
+      "parameters": {
+        "jsCode": "const mimeType = $binary.file?.mimeType || \"unknown\";\nconst fileName = $binary.file?.fileName || \"unknown\";\n\nreturn [{\n  text: \"\",\n  extraction_error: true,\n  error_message: `Unsupported file type: ${mimeType} (${fileName})`\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1056,
+        1384
+      ],
+      "id": "da1ded82-5322-4204-908a-d4985972a56f",
+      "name": "XTR_Unsupported",
+      "notes": "Handles unsupported file types by returning error with MIME type info."
+    },
+    {
+      "parameters": {
+        "jsCode": "const extraction = $input.first().json;\nconst prevData = $('INP_ValidateAndRoute').first().json;\nconst binary = $input.first().binary;\n\nconst errors = [];\nlet status = \"ok\";\nlet extractedText = \"\";\nlet extractionMethod = \"\";\n\n// Check if extraction failed\nif (extraction.extraction_error) {\n  errors.push({\n    stage: \"extract\",\n    message: extraction.error_message || \"Extraction failed\"\n  });\n  status = \"error\";\n} else {\n  // Get extracted text\n  if (typeof extraction.text === \"string\") {\n    extractedText = extraction.text;\n    extractionMethod = \"text\";\n  } else if (Array.isArray(extraction)) {\n    // CSV/Excel case - convert to JSON string\n    extractedText = JSON.stringify(extraction, null, 2);\n    extractionMethod = \"structured_data\";\n  } else if (typeof extraction === \"object\") {\n    extractedText = JSON.stringify(extraction, null, 2);\n    extractionMethod = \"structured_data\";\n  }\n  \n  // Check if text is empty\n  if (!extractedText || extractedText.trim().length === 0) {\n    errors.push({\n      stage: \"extract\",\n      message: \"Extraction succeeded but no text content found\"\n    });\n    status = \"partial\";\n  }\n}\n\n// Get file metadata\nconst mimeType = binary?.file?.mimeType || \"unknown\";\nconst fileName = binary?.file?.fileName || \"unknown\";\n\n// Determine extraction method from MIME type if not set\nif (!extractionMethod && mimeType) {\n  if (mimeType.includes(\"pdf\")) extractionMethod = \"pdf\";\n  else if (mimeType.includes(\"text\")) extractionMethod = \"text\";\n  else if (mimeType.includes(\"csv\")) extractionMethod = \"csv\";\n  else if (mimeType.includes(\"excel\") || mimeType.includes(\"spreadsheet\")) extractionMethod = \"excel\";\n  else if (mimeType.includes(\"word\") || mimeType.includes(\"document\")) extractionMethod = \"doc\";\n  else extractionMethod = \"other\";\n}\n\nreturn [{\n  status: status,\n  mode: \"EXTRACT_CONTENT\",\n  data: {\n    source_url: prevData.google_drive_file_url || \"\",\n    mimeType: mimeType,\n    file_name: fileName,\n    extracted_text: extractedText,\n    extraction_method: extractionMethod,\n    char_count: extractedText.length\n  },\n  errors: errors\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -832,
+        728
+      ],
+      "id": "bfb9f19e-b0eb-4e20-bfd2-ef9c2464f9be",
+      "name": "OUT_PackExtraction",
+      "notes": "Packages extraction results into standard output format with metadata and error tracking."
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.document_type }}",
+                    "rightValue": "google_doc",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "google_doc"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.document_type }}",
+                    "rightValue": "google_slides",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "google_slides"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.document_type }}",
+                    "rightValue": "google_sheet",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "google_sheet"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -1952,
+        1944
+      ],
+      "id": "e39b8a06-4ccd-44cb-8f05-09a98bb3a522",
+      "name": "SW_DocumentTypeRouter",
+      "notes": "Routes to appropriate document creation path based on document_type (google_doc, google_slides, google_sheet)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.reference_template_url }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1728,
+        1576
+      ],
+      "id": "dc8d3973-23b1-40ba-aacc-a06996a38c49",
+      "name": "DOC_CheckTemplate",
+      "notes": "Checks if reference template URL is provided. Routes to copy template or create new doc."
+    },
+    {
+      "parameters": {
+        "operation": "copy",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.template_file_id }}",
+          "mode": "id"
+        },
+        "name": "={{ $json.document_type }}_{{ $json.timestamp.split('T')[0] }}_{{ Date.now() }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -1504,
+        1480
+      ],
+      "id": "9487536e-22fd-4fc9-a647-985a31e0be9b",
+      "name": "GD_CopyDocTemplate",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "jk6snVCfAJTaBJyS",
+          "name": "Test User Google Drive Account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Copies template file into target folder with timestamped name."
+    },
+    {
+      "parameters": {
+        "driveId": {
+          "__rl": true,
+          "value": "sharedWithMe",
+          "mode": "list"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $json.google_drive_folder_id }}",
+          "mode": "id"
+        },
+        "title": "={{ $json.document_type }}_{{ $json.timestamp.split('T')[0] }}_{{ Date.now() }}"
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        -1504,
+        1672
+      ],
+      "id": "bc346acd-a653-4c48-b8ff-15d3e3a50d04",
+      "name": "DOC_CreateNewDoc",
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "8Se5WgPUVSkK9BjF",
+          "name": "Test User Google Docs Account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Creates new blank Google Doc in target folder when no template provided."
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * Converts input_json to formatted text for Google Docs\n * Handles both template replacement and new doc generation\n */\n\nconst prevData = $('INP_ValidateAndRoute').first().json;\nconst inputJson = prevData.input_json || {};\nconst currentData = $input.first().json;\n\n// Check if this is from template copy or new doc\nconst documentId = currentData.id || currentData.documentId || \"\";\nconst isTemplate = !!prevData.reference_template_url;\n\nlet content = \"\";\nconst errors = [];\n\ntry {\n  if (isTemplate) {\n    // STRATEGY: Template replacement\n    // Replace {{placeholders}} with values from input_json\n    content = \"Template-based content generation:\\n\\n\";\n    for (const [key, value] of Object.entries(inputJson)) {\n      if (typeof value === \"string\" || typeof value === \"number\") {\n        content += `Replace {{${key}}} with: ${value}\\n`;\n      } else if (Array.isArray(value)) {\n        content += `Replace {{${key}}} with:\\n`;\n        value.forEach(item => content += `• ${item}\\n`);\n      } else if (typeof value === \"object\" && value !== null) {\n        content += `Replace {{${key}}} with:\\n${JSON.stringify(value, null, 2)}\\n`;\n      }\n    }\n  } else {\n    // STRATEGY: Generate new content from scratch\n    content = generateDocumentContent(inputJson);\n  }\n} catch (e) {\n  errors.push({\n    stage: \"render\",\n    message: `Content generation error: ${e.message}`\n  });\n  content = `Error generating content: ${e.message}`;\n}\n\nreturn [{\n  document_id: documentId,\n  content: content,\n  input_json: inputJson,\n  render_errors: errors,\n  is_template: isTemplate\n}];\n\n// ========== Helper Functions ==========\n\nfunction generateDocumentContent(inputJson) {\n  const lines = [];\n  \n  // Add title if present\n  if (inputJson.title) {\n    lines.push(inputJson.title);\n    lines.push(\"=\".repeat(inputJson.title.length));\n    lines.push(\"\");\n  }\n  \n  // Add metadata section if present\n  if (inputJson.metadata && typeof inputJson.metadata === \"object\") {\n    lines.push(\"Document Information\");\n    lines.push(\"-\".repeat(20));\n    for (const [key, value] of Object.entries(inputJson.metadata)) {\n      lines.push(`${titleCase(key)}: ${value}`);\n    }\n    lines.push(\"\");\n  }\n  \n  // Process main content\n  for (const [key, value] of Object.entries(inputJson)) {\n    if (key === \"title\" || key === \"metadata\") continue;\n    \n    // Add section header\n    lines.push(\"\");\n    lines.push(titleCase(key));\n    lines.push(\"-\".repeat(titleCase(key).length));\n    lines.push(\"\");\n    \n    // Add section content\n    if (typeof value === \"string\") {\n      lines.push(value);\n    } else if (Array.isArray(value)) {\n      value.forEach(item => {\n        if (typeof item === \"string\") {\n          lines.push(`• ${item}`);\n        } else if (typeof item === \"object\") {\n          lines.push(`• ${JSON.stringify(item)}`);\n        }\n      });\n    } else if (typeof value === \"object\" && value !== null) {\n      // Handle nested objects\n      for (const [subKey, subValue] of Object.entries(value)) {\n        lines.push(`${titleCase(subKey)}:`);\n        if (Array.isArray(subValue)) {\n          subValue.forEach(item => lines.push(`  • ${item}`));\n        } else {\n          lines.push(`  ${subValue}`);\n        }\n        lines.push(\"\");\n      }\n    }\n  }\n  \n  return lines.join(\"\\n\");\n}\n\nfunction titleCase(str) {\n  return String(str)\n    .replace(/_/g, \" \")\n    .replace(/\\b\\w/g, c => c.toUpperCase());\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1280,
+        1576
+      ],
+      "id": "2e61b5e7-92ee-46c6-aba6-8d0778cab0f0",
+      "name": "DOC_PrepareContent",
+      "notes": "Processes input_json and generates formatted text content for insertion into Google Doc."
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentURL": "={{ $json.document_id }}",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "insert",
+              "text": "={{ $json.content }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        -1056,
+        1576
+      ],
+      "id": "df564d79-f0c6-4a4c-bd9f-489652a3cfee",
+      "name": "DOC_UpdateContent",
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "8Se5WgPUVSkK9BjF",
+          "name": "Test User Google Docs Account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Inserts generated content into Google Doc using Google Docs API."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.reference_template_url }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1504,
+        1960
+      ],
+      "id": "074ae3be-5589-4491-992e-80489e4a60ac",
+      "name": "SLIDES_CheckTemplate",
+      "notes": "Checks if reference template URL is provided for slides. Routes to copy or create new."
+    },
+    {
+      "parameters": {
+        "operation": "copy",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.template_file_id }}",
+          "mode": "id"
+        },
+        "name": "={{ $json.document_type }}_{{ $json.timestamp.split('T')[0] }}_{{ Date.now() }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -1280,
+        1864
+      ],
+      "id": "9651851b-8d55-4ecb-b1a0-e7b76dd1f911",
+      "name": "GD_CopySlideTemplate",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "jk6snVCfAJTaBJyS",
+          "name": "Test User Google Drive Account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Copies slide template into target folder."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slides.googleapis.com/v1/presentations",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSlidesOAuth2Api",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ title: $json.document_type + '_' + $json.timestamp.split('T')[0] + '_' + Date.now() }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -1280,
+        2056
+      ],
+      "id": "af2a4b70-6634-4ab7-8e43-5c193607ef35",
+      "name": "SLIDES_CreateNew",
+      "credentials": {
+        "googleSlidesOAuth2Api": {
+          "id": "jKbDMeyMm7MH1HPB",
+          "name": "Google Slides account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Creates new blank Google Slides presentation. Uses HTTP Request to Google Slides API."
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * For Slides: Simply pass through with minimal processing\n * Complex slide generation requires multiple API calls\n * This is a simplified implementation\n */\n\nconst prevData = $('INP_ValidateAndRoute').first().json;\nconst inputJson = prevData.input_json || {};\nconst currentData = $input.first().json;\n\nconst presentationId = currentData.presentationId || currentData.id || \"\";\nconst errors = [];\n\nreturn [{\n  presentation_id: presentationId,\n  input_json: inputJson,\n  render_errors: errors,\n  note: \"Slides content generation requires additional API implementation\"\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1056,
+        1960
+      ],
+      "id": "d7b4448d-c5c8-4d7f-8f70-88e97e28133a",
+      "name": "SLIDES_PrepareContent",
+      "notes": "Simplified slides preparation - passes through for now. Full implementation requires Google Slides API batch updates."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.reference_template_url }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1728,
+        2344
+      ],
+      "id": "a28eebb8-ac27-4bd0-8031-59550c51805f",
+      "name": "SHEET_CheckTemplate",
+      "notes": "Checks if reference template URL is provided for sheet."
+    },
+    {
+      "parameters": {
+        "operation": "copy",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.template_file_id }}",
+          "mode": "id"
+        },
+        "name": "={{ $json.document_type }}_{{ $json.timestamp.split('T')[0] }}_{{ Date.now() }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -1504,
+        2248
+      ],
+      "id": "392ea2f6-687c-4c65-8b3f-e30939c199e7",
+      "name": "GD_CopySheetTemplate",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "jk6snVCfAJTaBJyS",
+          "name": "Test User Google Drive Account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Copies sheet template into target folder."
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "documentId": {
+          "__rl": true,
+          "value": "1YL3CzjgLISQuqlnHAxt-mvI4NGN6zWBRy1eW-ni-VY8",
+          "mode": "list",
+          "cachedResultName": "Sample",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YL3CzjgLISQuqlnHAxt-mvI4NGN6zWBRy1eW-ni-VY8/edit?usp=drivesdk"
+        },
+        "title": "={{ $json.document_type }}_{{ $json.timestamp.split('T')[0] }}_{{ Date.now() }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        -1504,
+        2440
+      ],
+      "id": "d0b5e90d-4ab1-4542-9036-a459c4e0dcee",
+      "name": "SHEET_CreateNew",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YtOFcprkfPM3c3XG",
+          "name": "Test User Google Sheets Account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Creates new blank Google Sheet using Google Sheets node."
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * Converts input_json to tabular format for Google Sheets\n * Handles objects, arrays, and nested structures\n */\n\nconst prevData = $('INP_ValidateAndRoute').first().json;\nconst inputJson = prevData.input_json || {};\nconst currentData = $input.first().json;\n\nconst spreadsheetId = currentData.spreadsheetId || \"\";\nconst errors = [];\n\nconst rows = [];\n\ntry {\n  // Check if input_json is already array of objects (table format)\n  if (Array.isArray(inputJson)) {\n    // Extract headers from first object\n    if (inputJson.length > 0 && typeof inputJson[0] === \"object\") {\n      const headers = Object.keys(inputJson[0]);\n      rows.push(headers);\n      \n      // Add data rows\n      inputJson.forEach(item => {\n        const row = headers.map(h => item[h] || \"\");\n        rows.push(row);\n      });\n    }\n  } else if (typeof inputJson === \"object\") {\n    // Convert object to key-value pairs\n    rows.push([\"Key\", \"Value\"]);\n    \n    for (const [key, value] of Object.entries(inputJson)) {\n      if (Array.isArray(value)) {\n        rows.push([key, JSON.stringify(value)]);\n      } else if (typeof value === \"object\" && value !== null) {\n        rows.push([key, JSON.stringify(value, null, 2)]);\n      } else {\n        rows.push([key, String(value)]);\n      }\n    }\n  }\n} catch (e) {\n  errors.push({\n    stage: \"render\",\n    message: `Sheet generation error: ${e.message}`\n  });\n}\n\n// Convert rows to individual items for Google Sheets append\nconst items = rows.map((row, idx) => {\n  const obj = {};\n  row.forEach((cell, colIdx) => {\n    obj[`col${colIdx}`] = cell;\n  });\n  return obj;\n});\n\nreturn items.length > 0 ? items : [{\n  spreadsheet_id: spreadsheetId,\n  error: \"No data to insert\",\n  render_errors: errors\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1280,
+        2344
+      ],
+      "id": "56a44736-d0a6-43a3-bd9b-310f09fc6c3e",
+      "name": "SHEET_PrepareContent",
+      "notes": "Converts input_json to tabular data for sheet insertion."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('MERGE_SheetPaths').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        -1056,
+        2344
+      ],
+      "id": "2fe8386c-7ed0-4418-b33a-e600f8569dae",
+      "name": "SHEET_UpdateContent",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YtOFcprkfPM3c3XG",
+          "name": "Test User Google Sheets Account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Appends rows to Google Sheet."
+    },
+    {
+      "parameters": {
+        "jsCode": "const prevData = $('INP_ValidateAndRoute').first().json;\nconst currentData = $input.first().json;\nconst errors = [...(currentData.render_errors || [])];\n\nlet status = \"ok\";\nlet createdFileId = \"\";\nlet createdFileName = \"\";\nlet createdFileUrl = \"\";\n\n// Detect file creation result based on document type\nconst docType = prevData.document_type;\n\nif (currentData.error) {\n  errors.push({\n    stage: \"create\",\n    message: currentData.error.message || \"File creation failed\"\n  });\n  status = \"error\";\n} else {\n  // Extract file info based on type\n  if (docType === \"google_doc\") {\n    createdFileId = currentData.documentId || currentData.id || \"\";\n    createdFileUrl = `https://docs.google.com/document/d/${createdFileId}`;\n  } else if (docType === \"google_slides\") {\n    createdFileId = currentData.presentationId || currentData.presentation_id || currentData.id || \"\";\n    createdFileUrl = `https://docs.google.com/presentation/d/${createdFileId}`;\n  } else if (docType === \"google_sheet\") {\n    createdFileId = currentData.spreadsheetId || currentData.id || \"\";\n    createdFileUrl = `https://docs.google.com/spreadsheets/d/${createdFileId}`;\n  }\n  \n  // Check if we got a file ID\n  if (!createdFileId) {\n    errors.push({\n      stage: \"create\",\n      message: \"File created but could not extract file ID\"\n    });\n    status = \"partial\";\n  }\n  \n  createdFileName = currentData.title || currentData.name || \n                    `${docType}_${prevData.timestamp.split('T')[0]}`;\n}\n\nreturn [{\n  status: status,\n  mode: \"CREATE_FILE\",\n  data: {\n    google_drive_folder_id: prevData.google_drive_folder_id,\n    document_type: docType,\n    reference_template_url: prevData.reference_template_url,\n    created_file_id: createdFileId,\n    created_file_url: createdFileUrl,\n    created_file_name: createdFileName\n  },\n  errors: errors\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -832,
+        1976
+      ],
+      "id": "a01b37b3-1c1c-4172-8544-1e0923979864",
+      "name": "OUT_PackCreation",
+      "notes": "Packages CREATE_FILE results into standard output format."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pass through - data is already formatted\nconst output = $input.first().json;\n\n// Ensure all required fields exist\nreturn [{\n  status: output.status || \"error\",\n  mode: output.mode || \"unknown\",\n  data: output.data || {},\n  errors: output.errors || []\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -608,
+        328
+      ],
+      "id": "e64eb76a-4a6f-465c-a658-e409c33c0a1c",
+      "name": "OUT_Final",
+      "notes": "Final output node - combines all paths (validation errors, extract results, create results) into single standardized response."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.error }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1504,
+        424
+      ],
+      "id": "c48b479c-b7e2-4397-93ff-6a1768418051",
+      "name": "ERR_CheckDownloadError",
+      "notes": "Checks if download failed (permission denied, file not found, etc.). Routes to error handler if failed."
+    }
+  ],
+  "connections": {
+    "TRG_Start": {
+      "main": [
+        [
+          {
+            "node": "INP_ValidateAndRoute",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "INP_ValidateAndRoute": {
+      "main": [
+        [
+          {
+            "node": "SW_ModeRouter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SW_ModeRouter": {
+      "main": [
+        [
+          {
+            "node": "ERR_PackValidationError",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "GD_DownloadFile",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SW_DocumentTypeRouter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ERR_PackValidationError": {
+      "main": [
+        [
+          {
+            "node": "OUT_Final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GD_DownloadFile": {
+      "main": [
+        [
+          {
+            "node": "ERR_CheckDownloadError",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ERR_PackDownloadError": {
+      "main": [
+        [
+          {
+            "node": "OUT_Final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SW_MimeTypeRouter": {
+      "main": [
+        [
+          {
+            "node": "XTR_FromPDF",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "XTR_FromText",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "XTR_FromDoc",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "XTR_FromCSV",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "XTR_FromXLS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "XTR_FromXLSX",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "XTR_Unsupported",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "XTR_FromPDF": {
+      "main": [
+        [
+          {
+            "node": "OUT_PackExtraction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "XTR_FromText": {
+      "main": [
+        [
+          {
+            "node": "OUT_PackExtraction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "XTR_FromDoc": {
+      "main": [
+        [
+          {
+            "node": "OUT_PackExtraction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "XTR_FromCSV": {
+      "main": [
+        [
+          {
+            "node": "OUT_PackExtraction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "XTR_FromXLS": {
+      "main": [
+        [
+          {
+            "node": "OUT_PackExtraction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "XTR_FromXLSX": {
+      "main": [
+        [
+          {
+            "node": "OUT_PackExtraction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "XTR_Unsupported": {
+      "main": [
+        [
+          {
+            "node": "OUT_PackExtraction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OUT_PackExtraction": {
+      "main": [
+        [
+          {
+            "node": "OUT_Final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SW_DocumentTypeRouter": {
+      "main": [
+        [
+          {
+            "node": "DOC_CheckTemplate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SLIDES_CheckTemplate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SHEET_CheckTemplate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DOC_CheckTemplate": {
+      "main": [
+        [
+          {
+            "node": "GD_CopyDocTemplate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "DOC_CreateNewDoc",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GD_CopyDocTemplate": {
+      "main": [
+        [
+          {
+            "node": "DOC_PrepareContent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DOC_CreateNewDoc": {
+      "main": [
+        [
+          {
+            "node": "DOC_PrepareContent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DOC_PrepareContent": {
+      "main": [
+        [
+          {
+            "node": "DOC_UpdateContent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DOC_UpdateContent": {
+      "main": [
+        [
+          {
+            "node": "OUT_PackCreation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SLIDES_CheckTemplate": {
+      "main": [
+        [
+          {
+            "node": "GD_CopySlideTemplate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SLIDES_CreateNew",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GD_CopySlideTemplate": {
+      "main": [
+        [
+          {
+            "node": "SLIDES_PrepareContent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SLIDES_CreateNew": {
+      "main": [
+        [
+          {
+            "node": "SLIDES_PrepareContent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SLIDES_PrepareContent": {
+      "main": [
+        [
+          {
+            "node": "OUT_PackCreation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SHEET_CheckTemplate": {
+      "main": [
+        [
+          {
+            "node": "GD_CopySheetTemplate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SHEET_CreateNew",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GD_CopySheetTemplate": {
+      "main": [
+        [
+          {
+            "node": "SHEET_PrepareContent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SHEET_CreateNew": {
+      "main": [
+        [
+          {
+            "node": "SHEET_PrepareContent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SHEET_PrepareContent": {
+      "main": [
+        [
+          {
+            "node": "SHEET_UpdateContent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SHEET_UpdateContent": {
+      "main": [
+        [
+          {
+            "node": "OUT_PackCreation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OUT_PackCreation": {
+      "main": [
+        [
+          {
+            "node": "OUT_Final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ERR_CheckDownloadError": {
+      "main": [
+        [
+          {
+            "node": "ERR_PackDownloadError",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SW_MimeTypeRouter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {},
+  "activeVersionId": "b092db1e-73cf-488c-878a-1e4fbd9e13fb",
+  "versionCounter": 319,
+  "triggerCount": 0,
+  "shared": [
+    {
+      "updatedAt": "2026-02-06T12:23:15.283Z",
+      "createdAt": "2026-02-06T12:23:15.283Z",
+      "role": "workflow:owner",
+      "workflowId": "8N4Pzq6oTI5ligt4r8ZJ4",
+      "projectId": "JIV2elLHsVFXybZ2",
+      "project": {
+        "updatedAt": "2025-12-05T03:44:52.986Z",
+        "createdAt": "2025-12-05T02:56:21.571Z",
+        "id": "JIV2elLHsVFXybZ2",
+        "name": "Niket Puranik <niket@jombay.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      }
+    }
+  ],
+  "tags": []
+}

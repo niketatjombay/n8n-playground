@@ -1,12 +1,40 @@
-// 4.1_JS_SplitGroups — v2: Targeted content distribution
-// Key change: Uses content tags (step 5) to send ONLY relevant pre-work + KB per group.
+// ===================================================================
+// 4.1_JS_SplitGroups — GROUP DISTRIBUTOR
+// ===================================================================
+// Splits all pipeline data into 7 group-specific payloads for parallel
+// content generation. Each group receives ONLY its relevant slice of:
+//   - Blueprint entries (strategic direction per slide)
+//   - Slide template (Gagné/Kolb/AGES — deterministic)
+//   - Tagged pre-work slides (from content tagging step)
+//   - Tagged KB content units (from content tagging step)
+//
+// Input:  Blueprint + validated input + content tags + KB results
+// Output: { groups: { group_1..group_7 }, common_context, client_context,
+//           session_constraints, agent2_system_prompt }
+//
+// v2 optimization: Uses content tags for targeted distribution.
 // v1 sent ALL 73K chars of pre-work to ALL 7 groups (511K total).
 // v2 sends each group only its tagged subset (est. 74K total).
+// ===================================================================
 
 const agent1 = $input.first().json.agent1_output;
 const validatedInput = $('1.2_PREP_Input').first().json;
 const tagData = $('2.10_JS_ParseTags').first().json;
 const kbResults = $('2.7_JS_ParseKB').first().json.kb_results || [];
+
+// Content outline (structured modules from 2.0_SUB_Outline)
+let contentOutline = {};
+try {
+  const outlineNode = $('2.0_SUB_Outline').first().json;
+  contentOutline = outlineNode.formatted_outline || {};
+  if (typeof contentOutline === 'string') {
+    try { contentOutline = JSON.parse(contentOutline); } catch(e) { contentOutline = {}; }
+  }
+  if (!contentOutline.modules && outlineNode.llm_response) {
+    contentOutline = typeof outlineNode.llm_response === 'string'
+      ? JSON.parse(outlineNode.llm_response) : outlineNode.llm_response;
+  }
+} catch(e) { contentOutline = {}; }
 
 const blueprint = agent1.slide_blueprint || {};
 const contentTags = tagData.content_tags || {};
@@ -72,6 +100,15 @@ for (const def of groupDefs) {
     }
   }
 
+  // Per-slide KB mapping for explicit injection in content gen prompt
+  const perSlideKB = {};
+  for (const slideKey of def.slides) {
+    const tags = contentTags[slideKey] || {};
+    perSlideKB[slideKey] = (tags.kb_units || [])
+      .map(id => kbMap[id])
+      .filter(Boolean);
+  }
+
   groups[def.key] = {
     name: def.name,
     slides: def.slides,
@@ -79,7 +116,8 @@ for (const def of groupDefs) {
     blueprints: groupBlueprints,
     slide_template: groupTemplate,
     tagged_pre_work: groupPreWork,
-    tagged_kb: groupKB
+    tagged_kb: groupKB,
+    per_slide_kb: perSlideKB
   };
 }
 
@@ -87,7 +125,8 @@ for (const def of groupDefs) {
 const commonContext = {
   session_overview: agent1.session_overview || {},
   mandatory_jombay_frameworks: agent1.mandatory_jombay_frameworks || [],
-  sensitivity_log: agent1.sensitivity_log || []
+  sensitivity_log: agent1.sensitivity_log || [],
+  content_outline: contentOutline
 };
 
 // Agent 2 system prompt — v2: CONTENT ONLY (no facilitator scripts)
@@ -106,6 +145,12 @@ Each slide has a fixed type with pre-assigned Gagné event, Kolb stage, and AGES
 - gaps/conflicts/ambiguity → MUST appear as reviewer_flags
 - LOW confidence data → HEDGE the content, don't assert
 - If no pre-work is tagged for your slides, use blueprint direction + KB content
+
+=== CONTENT OUTLINE RULES ===
+- The content outline defines the client's intended module structure, topics, and frameworks
+- Use it to ensure your slide content aligns with the correct module/topic from the outline
+- When the outline specifies particular frameworks or models for a topic, reference them
+- If outline content conflicts with blueprint direction, follow the blueprint (it incorporates the outline already)
 
 === ON-SLIDE CONTENT RULES ===
 - LEAN and VISUAL-FIRST — slides are prompts, not scripts
@@ -148,16 +193,39 @@ Return a JSON object with one key per slide:
       "duration_minutes": null,
       "debrief_questions": []
     },
+    "facilitation_tips": ["Scannable delivery tips for the facilitator (1-3 tips, max 15 words each)"],
+    "modality_notes": {
+      "virtual": "What changes for online delivery (1 sentence)",
+      "in_person": "What changes for in-person delivery (1 sentence)"
+    },
     "provenance": "New | Reused | Adapted",
     "provenance_source": "CU_id or null",
+    "provenance_rationale": "Why this provenance decision — e.g. 'GROW model from CU_012 maps 80% to this slide's coaching objective'",
     "reviewer_flags": [{ "flag": "string", "reason": "string" }]
   }
+}
+
+EXAMPLE OUTPUT ENTRY:
+"slide_9": {
+  "slide_title": "The GROW Model: Your Coaching Compass",
+  "headline": "Four Questions That Transform Every Conversation",
+  "subtext": "From reactive problem-solving to structured coaching in 15 minutes",
+  "bullets": ["Goal: What outcome do you want?", "Reality: Where are you now?", "Options: What could you try?", "Will: What will you commit to?"],
+  "visual_guidance": "GROW model as a compass diagram with four quadrants, each showing one question and a Microland scenario example",
+  "activity": { "has_activity": false, "instructions": null, "duration_minutes": null, "debrief_questions": [] },
+  "facilitation_tips": ["Watch for participants defaulting to 'tell' mode — redirect to asking", "Pair participants who show different coaching styles from Echo"],
+  "modality_notes": { "virtual": "Use breakout rooms for paired GROW practice with timer", "in_person": "Arrange chairs face-to-face for coaching pairs" },
+  "provenance": "Reused",
+  "provenance_source": "CU_012",
+  "provenance_rationale": "GROW model from CU_012 maps 85% to this slide's coaching objective — only adaptation needed is Microland scenario examples",
+  "reviewer_flags": [{ "flag": "Pre-work confidence low on coaching readiness", "reason": "Hedge language: 'building toward' not 'mastering'" }]
 }
 
 IMPORTANT:
 - Return one entry per assigned slide (use slide_1, slide_2, etc. as keys)
 - Do NOT include facilitator scripts — those are generated separately
-- Do NOT include modality notes — those are generated separately
+- facilitation_tips are scannable tips (not the full script) — e.g. "Watch for anchoring to old process"
+- modality_notes are brief slide-level adaptations for delivery mode
 - Activity slides (type 12) MUST have instructions and duration_minutes
 - Every slide MUST have a headline and at least 1 bullet`;
 

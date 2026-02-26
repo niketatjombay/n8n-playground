@@ -35,7 +35,7 @@ const userPrompt = 'Write facilitator delivery scripts for the following slide g
 return [{ json: {
   system_prompt: data.script_system_prompt,
   prompt: userPrompt,
-  model: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+  model: 'global.anthropic.claude-sonnet-4-6',
   node_name: 'Script_GroupGROUP_NUM',
   memory_id: data.memory_id,
   knowledge_base_id: data.knowledge_base_id,

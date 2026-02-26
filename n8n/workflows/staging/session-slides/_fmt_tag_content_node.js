@@ -8,6 +8,16 @@
 const validatedInput = $('1.2_PREP_Input').first().json;
 const kbData = $('2.7_JS_ParseKB').first().json;
 
+// Content outline for mapping context
+let contentOutline = {};
+try {
+  const outlineNode = $('2.0_SUB_Outline').first().json;
+  contentOutline = outlineNode.formatted_outline || {};
+  if (typeof contentOutline === 'string') {
+    try { contentOutline = JSON.parse(contentOutline); } catch(e) { contentOutline = {}; }
+  }
+} catch(e) { contentOutline = {}; }
+
 const preWorkMeta = validatedInput.pre_work_metadata || {};
 const slideSummary = preWorkMeta.slide_summary || [];
 const slideTemplate = validatedInput.slide_template || {};
@@ -26,11 +36,12 @@ const kbSummary = kbResults.map(r => ({
   type: r.content_type || ''
 })).filter(r => r.id);
 
-// Build compact pre-work summary (just id + title for tagging)
+// Build compact pre-work summary (id + title + summary for tagging)
 const pwSummary = slideSummary.map(s => ({
   id: s.id,
   title: s.title,
-  confidence: s.confidence
+  confidence: s.confidence,
+  summary: (s.summary || '').substring(0, 300)  // 300 chars max to keep prompt compact
 }));
 
 const systemPrompt = `You are a content mapping assistant. Given a list of session slides, pre-work slides, and knowledge base units, determine which pre-work slides and KB units are relevant to each session slide.
@@ -43,6 +54,7 @@ OUTPUT RULES:
 - Do NOT add commentary — ONLY the JSON object.
 
 MAPPING GUIDANCE:
+- Each pre-work slide includes a SUMMARY of its bullet content. Use these summaries (not just titles) to determine relevance to each session slide.
 - slide_1 (Session title): pre-work project overview slides
 - slide_6 (Program overview): pre-work project/company profile slides
 - slide_7 (Objectives): pre-work themes, development goals
@@ -52,7 +64,8 @@ MAPPING GUIDANCE:
 - slide_12 (Activity): KB units with activities, exercises + pre-work real examples
 - slide_14 (Questions): pre-work challenges, participant pain points
 - slide_16 (Call to Action): pre-work development themes, action-oriented content
-- slides 2,3,4,5,8,13,15,17: typically empty or minimal mapping`;
+- slides 2,3,4,5,8,13,15,17: typically empty or minimal mapping
+- Use the CONTENT OUTLINE modules to understand which topics belong to which slides. Map KB units to the session slide whose outline module best matches.`;
 
 const userPrompt = `Map the pre-work slides and KB units to session slides. Return ONLY the JSON object.
 
@@ -63,7 +76,10 @@ ${JSON.stringify(sessionSlides)}
 ${JSON.stringify(pwSummary)}
 
 === KB UNITS (${kbSummary.length} items) ===
-${JSON.stringify(kbSummary)}`;
+${JSON.stringify(kbSummary)}
+
+=== CONTENT OUTLINE (module structure — use to guide mapping) ===
+${Object.keys(contentOutline).length > 0 ? JSON.stringify(contentOutline) : 'No content outline available.'}`;
 
 return [{ json: {
   system_prompt: systemPrompt,

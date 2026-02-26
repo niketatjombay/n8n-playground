@@ -18,7 +18,19 @@ const sessionConstraints = validatedInput.session_constraints || {};
 const competencies = Array.isArray(preWorkMeta.competencies) ? preWorkMeta.competencies : [];
 const themes = Array.isArray(preWorkMeta.development_themes) ? preWorkMeta.development_themes : [];
 
-const searchTerms = [...competencies, ...themes].filter(Boolean);
+// Add formatted outline themes to search terms
+let outlineThemes = [];
+let outlineFrameworks = [];
+try {
+  const outlineData = $('2.0_SUB_Outline').first().json;
+  const formattedOutline = outlineData.formatted_outline || (outlineData.llm_response ? JSON.parse(outlineData.llm_response) : {});
+  outlineThemes = Array.isArray(formattedOutline.themes) ? formattedOutline.themes : [];
+  outlineFrameworks = Array.isArray(formattedOutline.key_frameworks) ? formattedOutline.key_frameworks : [];
+} catch (e) {
+  // Outline not available or failed — continue with pre-work themes only
+}
+
+const searchTerms = [...competencies, ...themes, ...outlineThemes, ...outlineFrameworks].filter(Boolean);
 const competencyList = searchTerms.join(', ');
 
 const systemPrompt = 'You are a knowledge base search assistant at Jombay. '

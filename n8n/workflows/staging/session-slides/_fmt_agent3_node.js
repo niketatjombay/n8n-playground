@@ -128,7 +128,7 @@ const userPrompt = 'Review the following slide content for quality, completeness
 return [{ json: {
   system_prompt: systemPrompt,
   prompt: userPrompt,
-  model: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+  model: 'global.anthropic.claude-sonnet-4-6',
   node_name: 'Agent3_QAReviewer',
   memory_id: validatedInput.memory_id,
   knowledge_base_id: validatedInput.knowledge_base_id,

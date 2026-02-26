@@ -1,0 +1,234 @@
+{
+  "name": "[PROD] LLM Sub-workflow",
+  "description": null,
+  "active": true,
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "workflow_session_id",
+              "type": "any"
+            },
+            {
+              "name": "workflow_id",
+              "type": "any"
+            },
+            {
+              "name": "project_id",
+              "type": "any"
+            },
+            {
+              "name": "client_id",
+              "type": "any"
+            },
+            {
+              "name": "prompt",
+              "type": "any"
+            },
+            {
+              "name": "model"
+            },
+            {
+              "name": "node_name"
+            },
+            {
+              "name": "memory_id",
+              "type": "any"
+            },
+            {
+              "name": "knowledge_base_id",
+              "type": "any"
+            },
+            {
+              "name": "system_prompt",
+              "type": "any"
+            }
+          ]
+        }
+      },
+      "id": "951675a3-92b6-4774-8059-cc752e7fb8f3",
+      "typeVersion": 1.1,
+      "name": "Start",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [
+        -768,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "LChiwpG5qGEyeY76",
+          "mode": "list",
+          "cachedResultName": "nexus_workflow_prompt_templates",
+          "cachedResultUrl": "/projects/JIV2elLHsVFXybZ2/datatables/LChiwpG5qGEyeY76"
+        },
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -656,
+        144
+      ],
+      "id": "dt-model-config-001",
+      "name": "Get Model Config",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Resolve model name from datatable lookup\n// Datatable is the single source of truth for model IDs\n// Detects haiku/sonnet/opus keyword from caller, maps to datatable value\n// Falls back to haiku if no keyword match\n\nconst startData = $('Start').item.json;\nconst modelParam = (startData.model || '').toLowerCase();\n\n// Datatable identifier → keyword mapping\nconst IDENTIFIER_MAP = {\n  'agentcore-haiku-model': 'haiku',\n  'agentcore-sonnet-model': 'sonnet',\n  'agentcore-opus-model': 'opus'\n};\n\n// Build lookup from datatable rows: { haiku: '...', sonnet: '...', opus: '...' }\nconst modelLookup = {};\nconst dtRows = $('Get Model Config').all();\nfor (const row of dtRows) {\n  const id = row.json.identifier;\n  const val = row.json.value;\n  if (id && val && IDENTIFIER_MAP[id]) {\n    modelLookup[IDENTIFIER_MAP[id]] = val;\n  }\n}\n\n// Detect keyword in model param, default to haiku\nlet resolvedModel;\nif (modelParam.includes('opus')) {\n  resolvedModel = modelLookup.opus;\n} else if (modelParam.includes('sonnet')) {\n  resolvedModel = modelLookup.sonnet;\n} else {\n  resolvedModel = modelLookup.haiku;\n}\n\n// Pass through all original Start data with resolved model\nreturn [{ json: { ...startData, resolved_model: resolvedModel } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -448,
+        144
+      ],
+      "id": "resolve-model-001",
+      "name": "Resolve Model",
+      "notes": "Datatable-first: detects haiku/sonnet/opus keyword → looks up model from datatable. Defaults to haiku."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://agentcoreapi.jombay.com",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ (() => {\n  const PREFIX = 'Return raw JSON only. Do not use ```json or ``` markdown formatting.\\n\\n';\n  const SUFFIX = '\\n\\nCRITICAL RULES FOR OUTPUT:\\n- NO markdown code fences (no ```json or ```)\\n- NO explanations, preambles, or postambles\\n- NO text before or after the JSON\\n- NO comments inside the JSON\\n- Output must be ONLY valid JSON\\n- Output MUST start with { or [\\n- Output MUST end with } or ]';\n  const fullPrompt = PREFIX + $json.prompt + SUFFIX;\n  const sessionId = $json.workflow_session_id || 'session_default';\n  const runtimeId = 'runtime_session_' + sessionId + '_' + Date.now();\n  const payload = {\n    prompt: fullPrompt,\n    workflow_id: $json.workflow_id || 'workflow_default',\n    client_id: $json.client_id || 'client_default',\n    project_id: $json.project_id || 'project_default',\n    workflow_session_id: sessionId,\n    model: $json.resolved_model,\n    runtimeSessionId: runtimeId\n  };\n  if ($json.memory_id) payload.memory_id = $json.memory_id;\n  if ($json.knowledge_base_id) payload.knowledge_base_id = $json.knowledge_base_id;\n  if ($json.system_prompt) payload.system_prompt = $json.system_prompt;\n  return JSON.stringify(payload);\n})() }}",
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -256,
+        144
+      ],
+      "id": "a1e4c083-2b0a-4165-ac64-b4b1d6d599bf",
+      "name": "HTTP Request",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generic LLM response parser\n// Returns { llm_response: parsedJson } on success\n// Throws error with raw response on failure (for debugging)\n\nconst httpResponse = $input.first().json;\nconst startData = $('Start').item.json;\nconst nodeName = startData.node_name || 'Unknown';\n\n// Robust JSON parsing function - handles various LLM response formats\nfunction parseJsonRobust(response) {\n  if (!response) return null;\n  \n  let cleaned = typeof response === 'string' ? response : String(response);\n  cleaned = cleaned.trim();\n  \n  // Try 1: Parse as-is\n  try { return JSON.parse(cleaned); } catch (e) {}\n  \n  // Try 2: Remove markdown code fences with json identifier (handles ```json [line 86] etc)\n  if (cleaned.startsWith('```json')) {\n    const withoutFences = cleaned.replace(/^```json[^\\n]*\\n?/, '').replace(/\\n?```\\s*$/, '').trim();\n    try { return JSON.parse(withoutFences); } catch (e) {}\n  }\n  \n  // Try 3: Remove generic markdown code fences\n  if (cleaned.startsWith('```')) {\n    const withoutFences = cleaned.replace(/^```[^\\n]*\\n?/, '').replace(/\\n?```\\s*$/, '').trim();\n    try { return JSON.parse(withoutFences); } catch (e) {}\n  }\n  \n  // Try 4: Find JSON block between any code fences (handles annotations like [line X])\n  const codeBlockMatch = cleaned.match(/```(?:json)?[^\\n]*\\n?([\\s\\S]*?)\\n?```/);\n  if (codeBlockMatch && codeBlockMatch[1]) {\n    try { return JSON.parse(codeBlockMatch[1].trim()); } catch (e) {}\n  }\n  \n  // Try 5: Remove common prefixes\n  const prefixPatterns = [/^Here's the JSON:?\\s*/i, /^Here is the JSON:?\\s*/i, /^JSON:?\\s*/i, /^Response:?\\s*/i, /^Output:?\\s*/i, /^Result:?\\s*/i];\n  for (const pattern of prefixPatterns) {\n    if (pattern.test(cleaned)) {\n      const withoutPrefix = cleaned.replace(pattern, '').trim();\n      try { return JSON.parse(withoutPrefix); } catch (e) {\n        const withoutFences = withoutPrefix.replace(/^```(?:json)?[^\\n]*\\n?/, '').replace(/\\n?```\\s*$/, '').trim();\n        try { return JSON.parse(withoutFences); } catch (e2) {}\n      }\n    }\n  }\n  \n  // Try 6: Extract JSON from surrounding text (most permissive - find first { or [ to last } or ])\n  const jsonStartBrace = cleaned.indexOf('{');\n  const jsonStartBracket = cleaned.indexOf('[');\n  const jsonStart = jsonStartBrace !== -1 && jsonStartBracket !== -1 ? Math.min(jsonStartBrace, jsonStartBracket) : Math.max(jsonStartBrace, jsonStartBracket);\n  const jsonEndBrace = cleaned.lastIndexOf('}');\n  const jsonEndBracket = cleaned.lastIndexOf(']');\n  const jsonEnd = jsonEndBrace !== -1 && jsonEndBracket !== -1 ? Math.max(jsonEndBrace, jsonEndBracket) : Math.max(jsonEndBrace, jsonEndBracket);\n  \n  if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {\n    const extracted = cleaned.substring(jsonStart, jsonEnd + 1);\n    try { return JSON.parse(extracted); } catch (e) {\n      // Try fixing common JSON issues\n      const fixed = extracted.replace(/,\\s*}/g, '}').replace(/,\\s*]/g, ']').replace(/([{,]\\s*)(\\w+)(\\s*:)/g, '$1\"$2\"$3');\n      try { return JSON.parse(fixed); } catch (e2) {}\n    }\n  }\n  \n  return null;\n}\n\n// Check HTTP Status\nif (httpResponse.statusCode && httpResponse.statusCode >= 400) {\n  throw new Error(`[${nodeName}] HTTP ${httpResponse.statusCode}: ${httpResponse.body?.error || 'No details'}`);\n}\n\n// Extract agent_response\nlet agentResponse = httpResponse.body?.agent_response || httpResponse.agent_response || httpResponse.body?.response || httpResponse.response;\nif (!agentResponse && typeof httpResponse.body === 'string') agentResponse = httpResponse.body;\n\nif (!agentResponse) {\n  if (httpResponse.body?.error) throw new Error(`[${nodeName}] API error: ${httpResponse.body.error}`);\n  throw new Error(`[${nodeName}] No agent_response in HTTP response. Keys: ${Object.keys(httpResponse.body || {}).join(', ')}`);\n}\n\n// Parse JSON\nconst parsedJson = parseJsonRobust(agentResponse);\nif (!parsedJson) {\n  // Include raw LLM response in error for debugging\n  throw new Error(`[${nodeName}] JSON parse failed. Raw response: ${String(agentResponse).substring(0, 500)}`);\n}\n\nparsedJson.token_usage = $input.first().json.body.usage;\n// Return wrapped in llm_response key (no validation, no merging)\nreturn [{ json: { llm_response: parsedJson } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -48,
+        144
+      ],
+      "id": "07f063ee-5ea1-4300-980c-53f40a7172c5",
+      "name": "Parse JSON Response",
+      "notes": "Generic parser - returns { llm_response: parsedJson }"
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Get Model Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Model Config": {
+      "main": [
+        [
+          {
+            "node": "Resolve Model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Model": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Parse JSON Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {
+    "Start": [
+      {
+        "json": {
+          "workflow_session_id": "f5ad092c-97d4-4b65-8903-ea27f3aed54e",
+          "workflow_id": "f5ad092c-97d4-4b65-8903-ea27f3aed54e",
+          "project_id": "f5ad092c-97d4-4b65-8903-ea27f3aed54e",
+          "client_id": "699429af02a005b9975872e0",
+          "prompt": "Respond to the following message in JSON format: { response: '<llm-response>'}. Message: For caching?",
+          "model": null,
+          "node_name": null,
+          "memory_id": "short_term_memory_test-507JkT7s5w",
+          "knowledge_base_id": "E2XGRBCFDQ",
+          "system_prompt": "Answer to the user only based on the knowledge base data"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "activeVersionId": "063022b1-2a5b-451f-a3e1-e6490abb091b",
+  "versionCounter": 356,
+  "triggerCount": 0,
+  "shared": [
+    {
+      "updatedAt": "2026-02-06T12:22:54.027Z",
+      "createdAt": "2026-02-06T12:22:54.027Z",
+      "role": "workflow:owner",
+      "workflowId": "GDaWNcJJtLdY8Q6Y4Yv5p",
+      "projectId": "JIV2elLHsVFXybZ2",
+      "project": {
+        "updatedAt": "2025-12-05T03:44:52.986Z",
+        "createdAt": "2025-12-05T02:56:21.571Z",
+        "id": "JIV2elLHsVFXybZ2",
+        "name": "Niket Puranik <niket@jombay.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      }
+    }
+  ],
+  "tags": []
+}

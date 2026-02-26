@@ -4,9 +4,9 @@
  */
 
 class N8nClient {
-  constructor() {
-    this.apiKey = process.env.N8N_API_KEY;
-    this.baseURL = process.env.N8N_BASE_URL || 'http://localhost:5678';
+  constructor({ baseUrl, apiKey } = {}) {
+    this.apiKey = apiKey || process.env.N8N_API_KEY;
+    this.baseURL = baseUrl || process.env.N8N_BASE_URL || 'http://localhost:5678';
 
     if (!this.apiKey) {
       throw new Error('N8N_API_KEY not found in environment variables');

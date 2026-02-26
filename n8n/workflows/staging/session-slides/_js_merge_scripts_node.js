@@ -92,9 +92,38 @@ for (let i = 1; i <= 17; i++) {
       energy_note: '',
       modality_notes: { virtual: '', in_person: '' },
       debrief_questions: [],
-      activity_run_of_show: null
+      activity_run_of_show: null,
+      estimated_duration_minutes: null
     };
     continue;
+  }
+
+  // --- Normalize key variations from LLM ---
+  // LLM sometimes returns estimated_time_minutes instead of estimated_duration_minutes
+  if (entry.estimated_time_minutes !== undefined && entry.estimated_duration_minutes === undefined) {
+    entry.estimated_duration_minutes = entry.estimated_time_minutes;
+  }
+
+  // Extract fields from nested facilitator_script object if LLM nested them
+  if (typeof entry.facilitator_script === 'object' && entry.facilitator_script !== null) {
+    const fs = entry.facilitator_script;
+    // Pull up energy/delivery notes from nested structure
+    if (!entry.energy_note && (fs.energy_note || fs.delivery_notes || fs.tone_guidance)) {
+      entry.energy_note = fs.energy_note || fs.delivery_notes || fs.tone_guidance || '';
+      if (Array.isArray(entry.energy_note)) entry.energy_note = entry.energy_note.join('; ');
+    }
+    if (!entry.debrief_questions && fs.debrief_questions) {
+      entry.debrief_questions = fs.debrief_questions;
+    }
+    // Flatten facilitator_script to string
+    if (fs.verbal_script) {
+      entry.facilitator_script = fs.verbal_script;
+    } else if (fs.script) {
+      entry.facilitator_script = fs.script;
+    } else {
+      // Fall through to flattenScript below
+      entry.facilitator_script = fs;
+    }
   }
 
   // facilitator_script: ensure it exists as a string
@@ -136,6 +165,21 @@ for (let i = 1; i <= 17; i++) {
   // activity_run_of_show: string or null
   if (typeof entry.activity_run_of_show !== 'string') {
     entry.activity_run_of_show = null;
+  }
+
+  // optional_paths: array of { trigger, alternative }
+  if (!Array.isArray(entry.optional_paths)) {
+    entry.optional_paths = [];
+  }
+
+  // estimated_duration_minutes: integer or null
+  if (typeof entry.estimated_duration_minutes === 'number') {
+    // keep it
+  } else if (typeof entry.estimated_duration_minutes === 'string') {
+    const parsed = parseInt(entry.estimated_duration_minutes, 10);
+    entry.estimated_duration_minutes = isNaN(parsed) ? null : parsed;
+  } else {
+    entry.estimated_duration_minutes = null;
   }
 }
 

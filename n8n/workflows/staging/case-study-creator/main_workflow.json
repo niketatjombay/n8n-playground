@@ -1,7 +1,11 @@
 {
+  "updatedAt": "2026-02-24T07:21:42.521Z",
+  "createdAt": "2026-02-06T12:28:16.302Z",
+  "id": "Havb102ZBST1xaeHDhnAK",
   "name": "[STG] Case Study Creator",
   "description": null,
   "active": true,
+  "isArchived": false,
   "nodes": [
     {
       "parameters": {
@@ -1247,21 +1251,22 @@
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate",
-    "availableInMCP": true,
+    "availableInMCP": false,
     "callerPolicy": "workflowsFromSameOwner"
   },
   "staticData": null,
   "meta": null,
   "pinData": {},
-  "activeVersionId": "65dc14c3-c251-417e-b926-644ca531d17e",
-  "versionCounter": 160,
+  "versionId": "711c72e3-0d2a-41bd-bcab-04a947729dae",
+  "activeVersionId": "711c72e3-0d2a-41bd-bcab-04a947729dae",
+  "versionCounter": 86,
   "triggerCount": 1,
   "shared": [
     {
-      "updatedAt": "2026-02-03T12:08:22.264Z",
-      "createdAt": "2026-02-03T12:08:22.264Z",
+      "updatedAt": "2026-02-06T12:28:16.302Z",
+      "createdAt": "2026-02-06T12:28:16.302Z",
       "role": "workflow:owner",
-      "workflowId": "FNuyZvKPcr3YlVeskVBMj",
+      "workflowId": "Havb102ZBST1xaeHDhnAK",
       "projectId": "JIV2elLHsVFXybZ2",
       "project": {
         "updatedAt": "2025-12-05T03:44:52.986Z",
@@ -1271,48 +1276,1343 @@
         "type": "personal",
         "icon": null,
         "description": null,
-        "creatorId": "8083cc02-c696-4bbe-91a2-08d8a36f6735",
-        "projectRelations": [
-          {
-            "updatedAt": "2025-12-05T02:56:21.571Z",
-            "createdAt": "2025-12-05T02:56:21.571Z",
-            "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735",
-            "projectId": "JIV2elLHsVFXybZ2",
-            "user": {
-              "updatedAt": "2026-02-06T05:00:00.794Z",
-              "createdAt": "2025-12-05T02:55:59.706Z",
-              "id": "8083cc02-c696-4bbe-91a2-08d8a36f6735",
-              "email": "niket@jombay.com",
-              "firstName": "Niket",
-              "lastName": "Puranik",
-              "personalizationAnswers": {
-                "version": "v4",
-                "personalization_survey_submitted_at": "2025-12-05T03:46:42.524Z",
-                "personalization_survey_n8n_version": "1.122.5",
-                "companySize": "<20",
-                "companyType": "saas",
-                "role": "business-owner",
-                "reportedSource": "google"
-              },
-              "settings": {
-                "userActivated": true,
-                "easyAIWorkflowOnboarded": true,
-                "firstSuccessfulWorkflowId": "wjR2j2YRVwBR3XNq",
-                "userActivatedAt": 1764936522539,
-                "npsSurvey": {
-                  "responded": true,
-                  "lastShownAt": 1768980421286
-                }
-              },
-              "disabled": false,
-              "mfaEnabled": false,
-              "lastActiveAt": "2026-02-06",
-              "isPending": false
-            }
-          }
-        ]
+        "creatorId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
       }
     }
   ],
-  "tags": []
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-02-24T06:22:22.303Z",
+    "createdAt": "2026-02-24T06:22:22.303Z",
+    "versionId": "711c72e3-0d2a-41bd-bcab-04a947729dae",
+    "workflowId": "Havb102ZBST1xaeHDhnAK",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "/staging/case-study-creator",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          -18928,
+          8024
+        ],
+        "id": "c686bcb7-d8e3-4a8d-83f4-22f7cb033467",
+        "name": "1.1_TRG_Webhook",
+        "webhookId": "case-study-mod-v1",
+        "notes": "Entry point: Receives case study modification requests via webhook"
+      },
+      {
+        "parameters": {
+          "jsCode": "// NODE 1: INPUT VALIDATION - Parse input_json string from backend\n// Handles input from Nexus backend with JSON strings that need parsing\n\nconst body = $input.first().json.body || $input.first().json;\n\n// Helper to parse JSON strings\nfunction parseJSON(value, fieldName) {\n  if (!value) return null;\n  if (typeof value === 'object') return value;\n  if (typeof value === 'string') {\n    try {\n      return JSON.parse(value);\n    } catch (e) {\n      throw new Error(`Invalid ${fieldName} JSON format: ${e.message}`);\n    }\n  }\n  return null;\n}\n\n// Parse project_details JSON string\nconst projectDetails = parseJSON(body.project_details, 'project_details') || {};\n\n// Parse input_json JSON string (THIS WAS THE ISSUE!)\nconst inputJson = parseJSON(body.input_json, 'input_json') || {};\nconst resolvedLabels = inputJson.resolvedLabels || {};\nconst behaviours = inputJson.behaviours || [];\n\n// Map program_type to target_level\nfunction mapProgramTypeToLevel(programType) {\n  const map = {\n    'young_leaders_development': 'Mid',\n    'senior_leadership': 'High',\n    'executive': 'Exceptional',\n    'first_time_managers': 'Low'\n  };\n  return map[programType] || 'Mid';\n}\n\n// Extract required fields\nconst referenceUrl = inputJson.reference_case_url || resolvedLabels['Reference Case URL'] || '';\nconst clientName = body.client_name || projectDetails.name?.split('|')[0]?.trim() || '';\nconst industry = projectDetails.industry || '';\nconst targetLevel = mapProgramTypeToLevel(projectDetails.program_type);\n\n// Validate required fields\nconst missing = [];\nif (!referenceUrl) missing.push('reference_case_url');\nif (!clientName) missing.push('client_name');\nif (!industry) missing.push('industry');\nif (!behaviours || behaviours.length === 0) missing.push('behaviours');\n\nif (missing.length > 0) {\n  return [{\n    json: {\n      status: 'error',\n      error_type: 'validation_error',\n      error_message: `Missing required fields: ${missing.join(', ')}`,\n      missing_fields: missing,\n      debug_info: {\n        has_input_json: !!inputJson,\n        has_project_details: !!projectDetails,\n        behaviours_count: behaviours.length,\n        input_json_type: typeof body.input_json,\n        reference_url_sources: {\n          from_inputJson: inputJson.reference_case_url || null,\n          from_resolvedLabels: resolvedLabels['Reference Case URL'] || null\n        }\n      }\n    }\n  }];\n}\n\n// Validate reference URL format\nif (!referenceUrl.match(/^https:\\/\\/(drive|docs)\\.google\\.com\\//)) {\n  return [{\n    json: {\n      status: 'error',\n      error_type: 'validation_error',\n      error_message: 'Invalid Google Drive URL format',\n      received_url: referenceUrl\n    }\n  }];\n}\n\n// Validate behaviors count\nif (behaviours.length < 2 || behaviours.length > 15) {\n  return [{\n    json: {\n      status: 'error',\n      error_type: 'validation_error',\n      error_message: 'Behaviours count must be between 2 and 15',\n      received: behaviours.length\n    }\n  }];\n}\n\n// Extract additional fields\nconst creationDetails = inputJson.creationDetails || {};\nconst typeSpecificInputs = inputJson.typeSpecificInputs || {};\n\n// Parse CSV fields\nfunction parseCSV(str) {\n  if (!str) return [];\n  return str.split(',').map(s => s.trim()).filter(Boolean);\n}\n\n// All validations passed - return 3 core objects\nreturn [{\n  json: {\n    status: 'validated',\n    google_drive_file_url: referenceUrl,\n    // Core Object 1: Will be populated after extraction\n    reference_case_text: null,\n    // Core Object 2: case_study_context (normalized from input)\n    case_study_context: {\n      // Required fields\n      client_name: clientName,\n      industry: industry,\n      target_level: targetLevel,\n      business_function: creationDetails.businessFunction || resolvedLabels['Business Function'] || '',\n\n      // Behaviors (convert from array to expected format)\n      behaviors: behaviours.map(b => ({\n        name: b.name,\n        definition: b.definition || ''\n      })),\n\n      // Project memory\n      project_memory: body.current_project_memory || '',\n\n      // Creation config\n      creation_mode: inputJson.creationMode || resolvedLabels['Creation Mode'] || '',\n      base_case_study_name: inputJson.selectedBaseCaseStudy?.title || resolvedLabels['Base Case Study'] || '',\n      change_scope: typeSpecificInputs.changeScope || resolvedLabels['Change Scope'] || 'industry_context_only',\n\n      // Narrative settings\n      narrative_arc: parseCSV(resolvedLabels['Narrative Arc']) || creationDetails.narrativeArc || [],\n      tension_patterns: parseCSV(resolvedLabels['Tension Patterns']) || creationDetails.tensionPatterns || [],\n      decision_types: parseCSV(resolvedLabels['Decision Types']) || creationDetails.decisionTypes || [],\n      decision_complexity: creationDetails.decisionComplexity || resolvedLabels['Decision Complexity'] || 'medium_managerial',\n      tone: creationDetails.tone || resolvedLabels['Tone'] || 'professional_business',\n      must_include: parseCSV(resolvedLabels['Must Include']) || creationDetails.mustInclude || [],\n\n      // Case study settings\n      challenge_approach: typeSpecificInputs.challengeApproach || resolvedLabels['Challenge Approach'] || 'combined',\n      case_study_length: typeSpecificInputs.lengthPreference || resolvedLabels['Case Study Length'] || 'standard',\n      number_of_questions: parseInt(typeSpecificInputs.questionsPerChallenge || resolvedLabels['Questions per Challenge']) || 5,\n      hide_behaviors_in_questions: (typeSpecificInputs.questionsMustNotMentionBehaviors === true) || (resolvedLabels['Hide Behaviors in Questions'] === 'Yes'),\n\n      // Workflow identifiers\n      workflow_session_id: body.workflow_session_id || `session_${Date.now()}`,\n      workflow_id: body.workflow_id || 'case_study_modification',\n      project_id: body.project_id || '',\n      client_id: body.client_id || ''\n    },\n    // Core Object 3: Will accumulate generated content\n    generated_case: {}\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -18704,
+          8024
+        ],
+        "id": "50da3768-00a3-4005-995b-4bfd1ffffc54",
+        "name": "1.2_VAL_Input",
+        "notes": "Validates input and initializes 3 core objects: reference_case_text (null), case_study_context (user inputs), generated_case (empty)"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict"
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $json.status }}",
+                "rightValue": "validated",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          -18480,
+          8024
+        ],
+        "id": "843e01e3-bf9c-4ec0-9ce2-46b5d794fe90",
+        "name": "1.3_IF_Valid",
+        "notes": "Routes to document extraction if valid, error response if invalid"
+      },
+      {
+        "parameters": {
+          "jsCode": "const inputData = $input.first().json;\nreturn [{ json: { mode: 'EXTRACT_CONTENT', google_drive_file_url: inputData.google_drive_file_url } }];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -18256,
+          7952
+        ],
+        "id": "9283ecd4-5be6-4e31-940d-064ccb5cc850",
+        "name": "1.4_FMT_DriveUtils",
+        "notes": "Formats Google Drive document URL for extraction sub-workflow"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "8N4Pzq6oTI5ligt4r8ZJ4"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.1,
+        "position": [
+          -18032,
+          7952
+        ],
+        "id": "e2542109-8c46-4bbf-b7d4-d6c795d6b11e",
+        "name": "1.5_SUB_DriveUtils",
+        "alwaysOutputData": true,
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 3000,
+        "continueOnFail": true,
+        "notes": "Calls Drive Utils sub-workflow to extract reference case text from Google Doc"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Validate extraction and output 3 core objects\nconst subWorkflowResult = $input.first().json;\nconst originalInput = $('1.2_VAL_Input').first().json;\n\nconst validationErrors = [];\n\nif (subWorkflowResult.status !== 'ok') {\n  validationErrors.push(`Sub-workflow status is \"${subWorkflowResult.status}\", expected \"ok\"`);\n}\n\nif (Array.isArray(subWorkflowResult.errors) && subWorkflowResult.errors.length > 0) {\n  validationErrors.push(`Sub-workflow returned errors: ${JSON.stringify(subWorkflowResult.errors)}`);\n}\n\nif (!subWorkflowResult.data || typeof subWorkflowResult.data !== 'object') {\n  validationErrors.push('Sub-workflow data object is missing or invalid');\n}\n\nconst extractedText = subWorkflowResult.data?.extracted_text;\nif (!extractedText || typeof extractedText !== 'string' || extractedText.trim() === '') {\n  validationErrors.push('Extracted text is missing or empty');\n}\n\nconst charCount = subWorkflowResult.data?.char_count || 0;\nif (charCount < 100) {\n  validationErrors.push(`Extracted text too short (${charCount} chars)`);\n}\n\nif (validationErrors.length > 0) {\n  return [{\n    json: {\n      status: 'extraction_failed',\n      error_type: 'extraction_validation_error',\n      error_message: validationErrors.join(' | '),\n      validation_errors: validationErrors,\n      sub_workflow_output: subWorkflowResult\n    }\n  }];\n}\n\n// Return 3 core objects with populated reference_case_text\nreturn [{\n  json: {\n    status: 'extraction_validated',\n    // Core Object 1: Extracted text\n    reference_case_text: extractedText,\n    // Core Object 2: User context (unchanged)\n    case_study_context: originalInput.case_study_context,\n    // Core Object 3: Empty, will be filled by LLM nodes\n    generated_case: {},\n    // Metadata\n    extraction_metadata: {\n      source_url: subWorkflowResult.data.source_url,\n      mimeType: subWorkflowResult.data.mimeType,\n      file_name: subWorkflowResult.data.file_name,\n      extraction_method: subWorkflowResult.data.extraction_method,\n      char_count: charCount\n    }\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -17808,
+          7952
+        ],
+        "id": "70541b66-3ff9-47db-b1e0-e01dbb8ee039",
+        "name": "1.6_VAL_Extraction",
+        "notes": "Validates extraction result and populates reference_case_text in core objects"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict"
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $json.status }}",
+                "rightValue": "extraction_validated",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          -17584,
+          7952
+        ],
+        "id": "224275bd-0023-46a5-936b-4b6374878924",
+        "name": "1.7_IF_Extracted",
+        "notes": "Routes to LLM processing if extraction successful, error response if failed"
+      },
+      {
+        "parameters": {
+          "jsCode": "// FORMAT Node 2: Build context analysis prompt\nconst input = $input.first().json;\nconst ctx = input.case_study_context;\n\nconst behaviorNames = (ctx.behaviors || []).map(b => b.name).join(', ');\nconst behaviorCount = (ctx.behaviors || []).length;\n\nconst prompt = `You are a case study design architect. Generate design constraints for a behavioral assessment case study.\n\nINPUTS:\n- Client: ${ctx.client_name} | Industry: ${ctx.industry} | Level: ${ctx.target_level}\n- Function: ${ctx.business_function} | Complexity: ${ctx.decision_complexity}\n- Behaviors (${behaviorCount}): ${behaviorNames}\n- Narrative Arc: ${(ctx.narrative_arc || []).join(', ')}\n- Tension Patterns: ${(ctx.tension_patterns || []).join(', ')}\n- Decision Types: ${(ctx.decision_types || []).join(', ')}\n- Challenge Approach: ${ctx.challenge_approach}\n- Case Study Length: ${ctx.case_study_length}\n- Total Questions: ${ctx.number_of_questions}\n- Change Scope: ${ctx.change_scope}\n- Must Include: ${(ctx.must_include || []).join(', ')}\n\nPROJECT CONTEXT (from Focus Group Discussions):\n${ctx.project_memory || 'No project memory provided'}\n\nTASKS:\n\n1. Determine challenge count:\n   - 2-3 behaviors per challenge (from challenge_approach)\n   - Total challenges = ceil(behavior_count / 3), capped at 2-4\n   - 100% behavior coverage, no repeats\n\n2. Distribute behaviors across challenges:\n   - Group naturally complementary behaviors\n   - Use FGD insights to inform grouping (e.g., if FGD highlights \"reactive planning\", pair planning-related behaviors together)\n\n3. Distribute questions across challenges:\n   - Total: ${ctx.number_of_questions}\n   - Spread across challenges proportionally\n   - Each question tests 2-3 behaviors from its challenge\n\n4. Set difficulty using target_level:\n   | Level | Decision Complexity | Language | Ambiguity | Stakeholders |\n   | Low | Simple | Simple, accessible | Low | Direct team |\n   | Mid | Moderate trade-offs | Simple, professional | Moderate | Team + peers |\n   | High | Multi-variable | Professional, strategic | High | Cross-functional |\n   | Exceptional | Systemic | Executive | Very high | Org-wide + external |\n\n5. Generate word limits dictionary:\n   {\n     \"situation\": 130,\n     \"introduction_overview\": 60,\n     \"introduction_market\": 60,\n     \"introduction_initiative\": 40,\n     \"introduction_team_targets\": 40,\n     \"per_challenge\": 200,\n     \"conclusion\": 60,\n     \"per_question\": 40\n   }\n\n6. Extract 2-3 FGD integration points from project_memory:\n   Format: [{\"element\": \"string\", \"integration_suggestion\": \"how to weave this in\"}]\n\n7. Select 2-3 scenario styles from:\n   Crisis management | Strategic transformation | Operational efficiency | Team dynamics |\n   Cross-functional collaboration | Resource constraints | Market pressure |\n   Innovation adoption | Regulatory challenges\n\nRULES:\n- Default language difficulty to SIMPLE unless target_level is High/Exceptional\n- Short sentences throughout\n- Present continuous or past tense only\n\nReturn JSON only:\n{\n  \"design_constraints\": {\n    \"number_of_challenges\": number,\n    \"behavior_distribution\": {\n      \"challenge_1\": { \"behaviors\": [\"name1\", \"name2\"] },\n      \"challenge_2\": { \"behaviors\": [\"name3\", \"name4\"] }\n    },\n    \"question_distribution\": {\n      \"challenge_1\": number,\n      \"challenge_2\": number\n    },\n    \"scenario_styles\": [\"style1\", \"style2\"],\n    \"fgd_integration_points\": [\n      { \"theme\": \"string\", \"how_to_use\": \"string\" }\n    ],\n    \"difficulty\": {\n      \"decision_complexity\": \"string\",\n      \"language\": \"string\",\n      \"ambiguity\": \"string\",\n      \"stakeholder_complexity\": \"string\"\n    },\n    \"word_limits\": {\n      \"situation\": 130,\n      \"introduction_overview\": 60,\n      \"introduction_market\": 60,\n      \"introduction_initiative\": 40,\n      \"introduction_team_targets\": 40,\n      \"per_challenge\": 200,\n      \"conclusion\": 60,\n      \"per_question\": 40\n    }\n  }\n}\n`;\n\nreturn [{ json: {\n  prompt: prompt,\n  model: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',\n  node_name: 'Node2_Context',\n  workflow_session_id: ctx.workflow_session_id,\n  workflow_id: ctx.workflow_id,\n  project_id: ctx.project_id,\n  client_id: ctx.client_id\n}}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -17360,
+          7880
+        ],
+        "id": "54ce72de-27de-4fcb-b63b-1176c7d20212",
+        "name": "2.1_FMT_Context",
+        "notes": "Stage 2: Builds prompt for context analysis and design constraints generation (Sonnet)"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "GDaWNcJJtLdY8Q6Y4Yv5p"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.1,
+        "position": [
+          -17136,
+          7880
+        ],
+        "id": "435589b0-b9b0-410e-9487-beb6412d09fe",
+        "name": "2.2_LLM_Context",
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 5000,
+        "onError": "continueErrorOutput",
+        "notes": "Calls LLM to analyze inputs and generate case_design_constraints"
+      },
+      {
+        "parameters": {
+          "jsCode": "// MERGE Node 2: Add design_constraints to case_study_context\nconst llmResult = $input.first().json;\nconst coreObjects = $('1.6_VAL_Extraction').first().json;\n\nif (!llmResult.llm_response) {\n  throw new Error('Node 2 LLM response missing');\n}\n\n// Add design_constraints to existing case_study_context\nreturn [{\n  json: {\n    reference_case_text: coreObjects.reference_case_text,\n    case_study_context: {\n      ...coreObjects.case_study_context,\n      case_design_constraints: llmResult.llm_response.design_constraints || llmResult.llm_response\n    },\n    generated_case: coreObjects.generated_case,\n    extraction_metadata: coreObjects.extraction_metadata\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -16912,
+          7808
+        ],
+        "id": "08_MERGE_Node2_Output",
+        "name": "2.3_MRG_Context",
+        "notes": "Merges design constraints into case_study_context.case_design_constraints"
+      },
+      {
+        "parameters": {
+          "jsCode": "// FORMAT Node 3: Build reference parsing prompt\nconst input = $input.first().json;\nconst ctx = input.case_study_context;\nconst refText = input.reference_case_text || '';\n\nconst prompt = `Extract the structure and content elements from this reference case study.\n\nREFERENCE TEXT:\n${refText}\n\nCHANGE SCOPE: ${ctx.change_scope || 'industry_context_only'}\n\nExtract:\n1. Section structure (what sections exist, their order)\n2. For each section: key content elements (characters, company details, metrics, scenarios)\n3. Writing style (sentence length, tense, person, vocabulary level)\n4. Challenge structure (how many, what narrative beats each uses)\n5. How challenges interconnect (shared characters, cascading consequences)\n\n**Protagonist Details:**\n- Extract protagonist name and role\n- Note seniority level implied\n\n**Quantitative Data with Context:**\n- For each data point: {value: \"string\", context: \"where/how it's used\"}\n- Flag whether essential for decision or decorative\n\n**Table Relevance Flagging:**\n- For each table: {description: \"string\", essential: boolean}\n- Essential = needed for answering questions\n- Decorative = adds color but not required\n\nReturn JSON only:\n{\n  \"parsed_reference\": {\n    \"sections\": [\n      { \"name\": \"string\", \"word_count\": number, \"key_elements\": [\"string\"] }\n    ],\n    \"protagonist_name\": \"string\",\n    \"protagonist_role\": \"string\",\n    \"characters\": [\n      { \"name\": \"string\", \"role\": \"string\", \"appears_in\": [\"section_name\"] }\n    ],\n    \"company\": {\n      \"name\": \"string\",\n      \"industry\": \"string\",\n      \"products\": [\"string\"],\n      \"competitors\": [\"string\"]\n    },\n    \"metrics\": [\"string\"],\n    \"quantitative_data\": [{\"value\": \"string\", \"context\": \"string\"}],\n    \"tables\": [{\"description\": \"string\", \"essential\": true}],\n    \"challenge_structure\": {\n      \"count\": number,\n      \"interconnections\": [\"string\"]\n    },\n    \"style\": {\n      \"avg_sentence_length\": \"short|medium|long\",\n      \"tense\": \"string\",\n      \"person\": \"string\"\n    }\n  }\n}\n`;\n\nreturn [{ json: {\n  prompt: prompt,\n  model: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',\n  node_name: 'Node3_ParseRef',\n  workflow_session_id: ctx.workflow_session_id,\n  workflow_id: ctx.workflow_id,\n  project_id: ctx.project_id,\n  client_id: ctx.client_id\n}}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -16688,
+          7808
+        ],
+        "id": "f1dc5dbf-6ba5-44ea-b45e-eddac80c2f63",
+        "name": "3.1_FMT_ParseRef",
+        "notes": "Stage 3: Builds prompt for reference case parsing with protagonist, quantitative data, adaptation assessment (Sonnet)"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "GDaWNcJJtLdY8Q6Y4Yv5p"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.1,
+        "position": [
+          -16464,
+          7808
+        ],
+        "id": "e2077d84-f6bf-45c3-90a8-f9ab79b3a48b",
+        "name": "3.2_LLM_ParseRef",
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 5000,
+        "onError": "continueErrorOutput",
+        "notes": "Calls LLM to extract structure, style markers, and adaptation assessment from reference"
+      },
+      {
+        "parameters": {
+          "jsCode": "// MERGE Node 3: Add parsed_reference to generated_case\nconst llmResult = $input.first().json;\nconst prev = $('2.3_MRG_Context').first().json;\n\nif (!llmResult.llm_response) {\n  throw new Error('Node 3 LLM response missing');\n}\n\nreturn [{\n  json: {\n    reference_case_text: prev.reference_case_text,\n    case_study_context: prev.case_study_context,\n    generated_case: {\n      ...prev.generated_case,\n      parsed_reference: llmResult.llm_response.parsed_reference || llmResult.llm_response\n    },\n    extraction_metadata: prev.extraction_metadata\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -16240,
+          7736
+        ],
+        "id": "11_MERGE_Node3_Output",
+        "name": "3.3_MRG_ParseRef",
+        "notes": "Merges parsed reference into generated_case.parsed_reference_case"
+      },
+      {
+        "parameters": {
+          "jsCode": "// FORMAT Node 4: Build industry adaptation prompt\nconst input = $input.first().json;\nconst ctx = input.case_study_context;\nconst genCase = input.generated_case;\nconst parsedRef = genCase.parsed_reference || {};\n\nconst prompt = `Transform the reference case study elements to fit the target industry.\n\nREFERENCE:\n- Company: ${parsedRef.company?.name || 'Unknown'} (${parsedRef.company?.industry || 'Unknown'})\n- Characters: ${(parsedRef.characters || []).map(c => `${c.name} (${c.role})`).join(', ')}\n- Products: ${(parsedRef.company?.products || []).join(', ')}\n- Competitors: ${(parsedRef.company?.competitors || []).join(', ')}\n- Metrics: ${(parsedRef.metrics || []).join(', ')}\n\nTARGET:\n- Client: ${ctx.client_name} | Industry: ${ctx.industry} | Function: ${ctx.business_function}\n- Change Scope: ${ctx.change_scope}\n\nRULES:\n- Replace company name, products, competitors, and metrics with ${ctx.industry}-authentic equivalents\n- All names, brands, data must be fictional\n- Designations and products must exist in the target industry/region\n- If change_scope is \"Change only industry context\": preserve narrative structure, character dynamics, and challenge flow — only swap industry-specific elements\n\n### Industry Terms - Parenthetical Explanations (MANDATORY)\nFor any industry-specific term that might be unfamiliar:\n- Add brief parenthetical explanation\n- Example: \"CAR (Corrective Action Request)\" or \"EBITDA margins (earnings before interest, tax, depreciation, amortization)\"\n- Keep explanations to 3-7 words\n\n### Protagonist Name Adaptation\n- If original name seems culturally mismatched for ${ctx.client_name}'s region, adapt\n- Ensure name matches geographic/cultural context\n- Keep original if already appropriate\n\n## QUALITY CHECK BEFORE OUTPUT\n□ Every paragraph authentically reflects ${ctx.industry}?\n□ No leftover references to original industry/company?\n□ Strategic context points feel naturally integrated?\n□ Someone from ${ctx.client_name} would recognize this as realistic?\n□ Word counts haven't bloated significantly?\n\nReturn JSON only:\n{\n  \"industry_adapted\": {\n    \"company_name\": \"string (fictional)\",\n    \"industry_context\": \"string (one line)\",\n    \"products_services\": [\"string\"],\n    \"competitors\": [\n      { \"name\": \"string\", \"positioning\": \"string\" }\n    ],\n    \"characters\": [\n      { \"original_name\": \"string\", \"new_name\": \"string\", \"role\": \"string\" }\n    ],\n    \"metrics\": [\n      { \"original\": \"string\", \"adapted\": \"string\" }\n    ],\n    \"regional_notes\": \"string (if any region-specific adjustments)\"\n  }\n}\n`;\n\nreturn [{ json: {\n  prompt: prompt,\n  model: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',\n  node_name: 'Node4_Industry',\n  workflow_session_id: ctx.workflow_session_id,\n  workflow_id: ctx.workflow_id,\n  project_id: ctx.project_id,\n  client_id: ctx.client_id\n}}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -16016,
+          7736
+        ],
+        "id": "c414a7ad-00e7-4725-8604-175d811a9ad2",
+        "name": "4.1_FMT_Industry",
+        "notes": "Stage 4: Builds prompt for industry transformation with terminology mapping (Sonnet)"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "GDaWNcJJtLdY8Q6Y4Yv5p"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.1,
+        "position": [
+          -15792,
+          7736
+        ],
+        "id": "29ebb52c-32c9-4872-a5f0-715d9a6bace1",
+        "name": "4.2_LLM_Industry",
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 5000,
+        "onError": "continueErrorOutput",
+        "notes": "Calls LLM to transform case to new industry context"
+      },
+      {
+        "parameters": {
+          "jsCode": "// MERGE Node 4: Add industry_adapted to generated_case\nconst llmResult = $input.first().json;\nconst prev = $('3.3_MRG_ParseRef').first().json;\n\nif (!llmResult.llm_response) {\n  throw new Error('Node 4 LLM response missing');\n}\n\nreturn [{\n  json: {\n    reference_case_text: prev.reference_case_text,\n    case_study_context: prev.case_study_context,\n    generated_case: {\n      ...prev.generated_case,\n      industry_adapted: llmResult.llm_response.industry_adapted || llmResult.llm_response\n    },\n    extraction_metadata: prev.extraction_metadata\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -15568,
+          7664
+        ],
+        "id": "12_MERGE_Node4_Output",
+        "name": "4.3_MRG_Industry",
+        "notes": "Merges industry adaptation into generated_case.industry_adapted_case"
+      },
+      {
+        "parameters": {
+          "jsCode": "// FORMAT Node 5: Build behavior mapping prompt\nconst input = $input.first().json;\nconst ctx = input.case_study_context;\nconst genCase = input.generated_case;\nconst constraints = ctx.case_design_constraints || ctx.design_constraints || {};\nconst industryAdapted = genCase.industry_adapted || {};\n\nconst behaviorsWithDef = (ctx.behaviors || []).map(b => `- ${b.name}: ${b.definition}`).join('\\n');\n\nconst prompt = `Create challenge outlines and map questions to behaviors.\n\nBEHAVIOR DISTRIBUTION:\n${JSON.stringify(constraints.behavior_distribution, null, 2)}\n\nQUESTION DISTRIBUTION:\n${JSON.stringify(constraints.question_distribution, null, 2)}\n\nBEHAVIORS (with definitions):\n${behaviorsWithDef}\n\nINDUSTRY CONTEXT: ${industryAdapted.company_name} — ${industryAdapted.industry_context}\nSCENARIO STYLES: ${(constraints.scenario_styles || []).join(', ')}\nFGD POINTS: ${JSON.stringify(constraints.fgd_integration_points || [], null, 2)}\nTENSION PATTERNS: ${(ctx.tension_patterns || []).join(', ')}\nDECISION TYPES: ${(ctx.decision_types || []).join(', ')}\nNARRATIVE ARC: ${(ctx.narrative_arc || []).join(', ')}\n\nFor each challenge, create:\n1. A thematic title (e.g., \"Navigating Complexity\", \"Building Capability\")\n2. A scenario outline (2-3 sentences: triggering event, core tension, what's at stake)\n3. Which FGD point it integrates\n4. Which tension patterns and decision types it uses\n\n**B. BEHAVIOR STITCHING STORYLINE**\nThis is CRITICAL. Show how ALL behaviors in this challenge connect into ONE coherent scenario:\n- How will Behavior 1 manifest? (What goes wrong because of its absence?)\n- How will Behavior 2 manifest? (What consequence shows the need?)\n- How will Behavior 3 manifest? (What situation demands it?)\n- How do these behaviors INTERCONNECT in the same situation?\n\nRULE: Behaviors must be WOVEN together, not presented as separate mini-problems.\n\n**C. EVIDENCE MOMENTS**\nFor each behavior, list 2-3 specific moments in a participant's response where the behavior could be demonstrated. These become the \"behavior surface area\" for assessment.\n\n**D. MANDATORY ELEMENTS PLANNING**\nPlan how this challenge will include:\n- Quantitative metrics/data\n- Cause-effect relationships\n- Human/people implications\n- Business implications\n\n**E. DIFFICULTY CALIBRATION**\nBased on ambiguity_level and stakeholder_complexity:\n- What information will be deliberately unclear?\n- Which stakeholders will have competing interests?\n- What interconnection exists with other challenges?\n\nFor each question, specify:\n1. Which challenge it belongs to\n2. Which 2-3 behaviors it tests\n3. A one-line focus (what the question should probe)\n\nRULES:\n- Every behavior appears in exactly one challenge\n- Every behavior is tested by at least one question\n- Challenges must interconnect (shared characters or cascading consequences)\n- At least one challenge must include the reader's own leadership failure\n- At least one challenge must have a strategic decision point\n\nReturn JSON only:\n{\n  \"behavior_mapping\": {\n    \"challenges\": [\n      {\n        \"number\": 1,\n        \"title\": \"string\",\n        \"behaviors\": [\"name1\", \"name2\"],\n        \"scenario_outline\": \"string\",\n        \"behavior_stitching_storyline\": \"string\",\n        \"evidence_moments\": [{\"behavior\": \"name\", \"moments\": [\"string\", \"string\"]}],\n        \"mandatory_elements_plan\": {\"metrics\": \"string\", \"cause_effect\": \"string\", \"human_implications\": \"string\"},\n        \"fgd_point\": \"string\",\n        \"tension\": \"string\",\n        \"decision_type\": \"string\",\n        \"reader_failure\": true,\n        \"strategic_decision\": true,\n        \"interconnection\": \"string\",\n        \"red_herring_elements\": [\"string\"]\n      }\n    ],\n    \"questions\": [\n      {\n        \"number\": 1,\n        \"challenge_number\": 1,\n        \"behaviors_tested\": [\"name1\", \"name2\"],\n        \"focus\": \"string\"\n      }\n    ]\n  }\n}\n`;\n\nreturn [{ json: {\n  prompt: prompt,\n  model: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',\n  node_name: 'Node5_Behavior',\n  workflow_session_id: ctx.workflow_session_id,\n  workflow_id: ctx.workflow_id,\n  project_id: ctx.project_id,\n  client_id: ctx.client_id\n}}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -15344,
+          7664
+        ],
+        "id": "fe8bb4c0-1f2b-4fd1-b62f-59f5bd3f4a8c",
+        "name": "5.1_FMT_Behavior",
+        "notes": "Stage 5: Builds prompt for behavior mapping with stitching storyline, evidence moments, challenge outlines (Sonnet)"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "GDaWNcJJtLdY8Q6Y4Yv5p"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.1,
+        "position": [
+          -15120,
+          7664
+        ],
+        "id": "7aaad4d7-53c8-4e37-a8f1-8f4ef52dd87d",
+        "name": "5.2_LLM_Behavior",
+        "retryOnFail": true,
+        "onError": "continueErrorOutput",
+        "notes": "Calls LLM to map behaviors to challenges and generate outlines"
+      },
+      {
+        "parameters": {
+          "jsCode": "// MERGE Node 5: Add challenge_outlines to generated_case (V3 - simplified)\nconst llmResult = $input.first().json;\nconst prev = $('4.3_MRG_Industry').first().json;\n\nif (!llmResult.llm_response) {\n  throw new Error('Node 5 LLM response missing');\n}\n\nconst response = llmResult.llm_response;\n\nreturn [{\n  json: {\n    reference_case_text: prev.reference_case_text,\n    case_study_context: prev.case_study_context,\n    generated_case: {\n      ...prev.generated_case,\n      behavior_mapping: { challenge_outlines: response.challenge_outlines || [] }\n    },\n    extraction_metadata: prev.extraction_metadata\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -14896,
+          7592
+        ],
+        "id": "13_MERGE_Node5_Output",
+        "name": "5.3_MRG_Behavior",
+        "notes": "Merges behavior mapping and outlines into generated_case.behavior_mapping, generated_case.challenge_outlines"
+      },
+      {
+        "parameters": {
+          "jsCode": "// FORMAT Node 6a: Build prompt for situation & introduction writing\nconst input = $input.first().json;\nconst ctx = input.case_study_context;\nconst genCase = input.generated_case;\n\nconst constraints = ctx.case_design_constraints || ctx.design_constraints || {};\nconst industryAdapted = genCase.industry_adapted || genCase.industry_adapted_case || {};\nconst behaviorMapping = genCase.behavior_mapping || {};\nconst challengeOutlines = behaviorMapping.challenge_outlines || behaviorMapping.challenges || [];\n\nconst wordLimits = constraints.word_limits || {\n  situation: 130,\n  introduction_overview: 60,\n  introduction_market: 60,\n  introduction_initiative: 40,\n  introduction_team_targets: 40\n};\n\nconst prompt = `You are a case study writer. Write the SITUATION and INTRODUCTION sections only.\n\n## ADAPTED CASE STRUCTURE\n${JSON.stringify(industryAdapted, null, 2)}\n\n## CHALLENGE OUTLINES\n${JSON.stringify(challengeOutlines, null, 2)}\n\n## WORD LIMITS\n- Situation: ${wordLimits.situation} words\n- Introduction total: ${(wordLimits.introduction_overview || 60) + (wordLimits.introduction_market || 60) + (wordLimits.introduction_initiative || 40) + (wordLimits.introduction_team_targets || 40)} words\n  - Company overview: ${wordLimits.introduction_overview} words\n  - Market context: ${wordLimits.introduction_market} words\n  - Strategic initiative: ${wordLimits.introduction_initiative} words (or null if not applicable)\n  - Team and targets: ${wordLimits.introduction_team_targets} words\n\n## YOUR TASK\n\n### 1. Write SITUATION Section (~${wordLimits.situation} words)\n- Second person, direct address (\"You have recently been assigned as...\")\n- Introduce protagonist by name and role\n- State protagonist's accountability (outcomes, not activities)\n- Introduce ALL characters who appear in challenges\n- Set performance targets and stakes\n- Create urgency\n\n### 2. Write INTRODUCTION (4 sub-sections, ~${(wordLimits.introduction_overview || 60) + (wordLimits.introduction_market || 60) + (wordLimits.introduction_initiative || 40) + (wordLimits.introduction_team_targets || 40)} words total)\n\n**Company Overview (~${wordLimits.introduction_overview} words):**\n- Company name, industry, size, reputation\n- Core products/services\n- Market position\n\n**Market Context (~${wordLimits.introduction_market} words):**\n- Industry trends affecting company\n- Competitive pressures\n- Market opportunities or threats\n\n**Strategic Initiative (~${wordLimits.introduction_initiative} words, or null if not applicable):**\n- Major change/transformation underway\n- Why it matters\n- Expected impact\n- If no strategic initiative applies, return null\n\n**Team and Targets (~${wordLimits.introduction_team_targets} words):**\n- Team structure and key members\n- Current performance vs targets\n- Specific metrics and deadlines\n\n## RULES\n- Use EXACT names from industry_adapted case\n- Use short sentences (10-15 words average)\n- Present continuous or past tense only\n- NO future tense, NO hypotheticals\n- Introduce characters naturally (don't list them)\n- ALL numbers/metrics from industry_adapted must appear\n\n## OUTPUT\nReturn valid JSON only:\n{\n  \"situation\": \"string (~${wordLimits.situation} words)\",\n  \"introduction\": {\n    \"company_overview\": \"string (~${wordLimits.introduction_overview} words)\",\n    \"market_context\": \"string (~${wordLimits.introduction_market} words)\",\n    \"strategic_initiative\": \"string or null (~${wordLimits.introduction_initiative} words)\",\n    \"team_and_targets\": \"string (~${wordLimits.introduction_team_targets} words)\"\n  }\n}\n`;\n\nreturn [{ json: {\n  prompt: prompt,\n  model: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',\n  node_name: 'Node6a_SituationIntro',\n  workflow_session_id: ctx.workflow_session_id,\n  workflow_id: ctx.workflow_id,\n  project_id: ctx.project_id,\n  client_id: ctx.client_id\n}}];"
+        },
+        "id": "node6a1",
+        "name": "6a.1_FMT_SituationIntro",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1800,
+          300
+        ],
+        "notes": "Builds prompt for situation and introduction writing (Stage 6a)"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "GDaWNcJJtLdY8Q6Y4Yv5p"
+          }
+        },
+        "id": "node6a2",
+        "name": "6a.2_LLM_SituationIntro",
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.1,
+        "position": [
+          2000,
+          300
+        ],
+        "notes": "Calls LLM to write situation and introduction sections",
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 5000,
+        "onError": "continueErrorOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// MERGE Node 6a: Add situation and introduction to generated_case\nconst llmResult = $input.first().json;\nconst prev = $('5.3_MRG_Behavior').first().json;\n\nif (!llmResult.llm_response) {\n  throw new Error('Node 6a LLM response missing');\n}\n\nconst response = llmResult.llm_response;\n\nreturn [{\n  json: {\n    reference_case_text: prev.reference_case_text,\n    case_study_context: prev.case_study_context,\n    generated_case: {\n      ...prev.generated_case,\n      situation: response.situation || '',\n      introduction: response.introduction || {}\n    },\n    extraction_metadata: prev.extraction_metadata\n  }\n}];"
+        },
+        "id": "node6a3",
+        "name": "6a.3_MRG_SituationIntro",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2200,
+          300
+        ],
+        "notes": "Merges situation and introduction into generated_case"
+      },
+      {
+        "parameters": {
+          "jsCode": "// FORMAT Node 6b: Build prompt for challenge writing\nconst input = $input.first().json;\nconst ctx = input.case_study_context;\nconst genCase = input.generated_case;\n\nconst constraints = ctx.case_design_constraints || ctx.design_constraints || {};\nconst industryAdapted = genCase.industry_adapted || genCase.industry_adapted_case || {};\nconst behaviorMapping = genCase.behavior_mapping || {};\nconst situation = genCase.situation || '';\nconst introduction = genCase.introduction || {};\nconst challengeOutlines = behaviorMapping.challenge_outlines || behaviorMapping.challenges || [];\n\nconst wordLimits = constraints.word_limits || { per_challenge: 200 };\n\n// Concatenate introduction sub-sections\nconst introText = [\n  introduction.company_overview,\n  introduction.market_context,\n  introduction.strategic_initiative,\n  introduction.team_and_targets\n].filter(Boolean).join('\\n\\n');\n\nconst prompt = `You are a case study writer. Write the challenge blocks. The Situation and Introduction are already written — continue the narrative.\n\n## SITUATION (for continuity)\n${situation}\n\n## INTRODUCTION (for continuity)\n${introText}\n\n## CHALLENGE OUTLINES\n${JSON.stringify(challengeOutlines, null, 2)}\n\n## CHARACTERS\n${JSON.stringify(industryAdapted.characters || [], null, 2)}\n\n## COMPETITORS\n${JSON.stringify(industryAdapted.competitors || [], null, 2)}\n\n## METRICS\n${JSON.stringify(industryAdapted.metrics || [], null, 2)}\n\n## FGD POINTS\n${JSON.stringify(constraints.fgd_integration_points || [], null, 2)}\n\n## WORD LIMIT\n${wordLimits.per_challenge} words per challenge\n\n## YOUR TASK\n\nFor each challenge, write a narrative block following these 6 beats:\n\n1. **Triggering Event** — concrete, high-stakes. Name the customer/stakeholder with a deal value or impact number.\n2. **Root Cause** — what went wrong, told through specific actions of named people. Show multiple perspectives creating tension.\n3. **Reader Contribution** (where marked in outline) — what the reader did or failed to do. Use specific quotes of vague/insufficient feedback the reader gave. NOT passive descriptions.\n4. **Escalation** — how the problem worsened. Quantify consequences (days delayed, money at risk, customers affected).\n5. **Reader's Self-Reflection** — \"You realize that...\" moment showing a deeper issue the reader missed.\n6. **Strategic Decision Point** (where marked in outline) — a resource allocation, investment, or trade-off the reader must consider.\n\n## INTERCONNECTION RULES\n- Reuse characters across challenges\n- A failure in one challenge should raise stakes in the next\n- Reference the strategic initiative (if introduced) across challenges\n\n## WRITING RULES\n- Simple language. Short sentences (max 15-18 words).\n- Present continuous or past tense only.\n- Context before and after any data/table. Seamless flow.\n- Cause-effect must be explicit.\n- Industry terms get one-line explanation in parentheses.\n- Consequences must match the target audience level (${ctx.target_level}).\n\n## OUTPUT\nReturn valid JSON only:\n{\n  \"challenges\": [\n    {\n      \"number\": 1,\n      \"title\": \"string\",\n      \"content\": \"string (~${wordLimits.per_challenge} words)\",\n      \"behaviors_assessed\": [\"name1\", \"name2\"],\n      \"characters_used\": [\"name1\", \"name2\"],\n      \"metrics_used\": [\"string\"]\n    }\n  ]\n}\n`;\n\nreturn [{ json: {\n  prompt: prompt,\n  model: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',\n  node_name: 'Node6b_Challenge',\n  workflow_session_id: ctx.workflow_session_id,\n  workflow_id: ctx.workflow_id,\n  project_id: ctx.project_id,\n  client_id: ctx.client_id\n}}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -14672,
+          7592
+        ],
+        "id": "edde739b-ab6f-4720-90d7-75d2b7b043a9",
+        "name": "6b.1_FMT_Challenge",
+        "notes": "Stage 6b: Builds prompt for challenge writing with 6 narrative beats and metadata"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "GDaWNcJJtLdY8Q6Y4Yv5p"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.1,
+        "position": [
+          -14448,
+          7592
+        ],
+        "id": "39c43267-9a26-47db-b1dc-3a5e33773a11",
+        "name": "6b.2_LLM_Challenge",
+        "retryOnFail": true,
+        "onError": "continueErrorOutput",
+        "notes": "Calls LLM to write challenges with \"Gives Away Answer\" prevention"
+      },
+      {
+        "parameters": {
+          "jsCode": "// MERGE Node 6b: Add challenges to generated_case\nconst llmResult = $input.first().json;\nconst prev = $('6a.3_MRG_SituationIntro').first().json;\n\nif (!llmResult.llm_response) {\n  throw new Error('Node 6b LLM response missing');\n}\n\nconst response = llmResult.llm_response;\n\nreturn [{\n  json: {\n    reference_case_text: prev.reference_case_text,\n    case_study_context: prev.case_study_context,\n    generated_case: {\n      ...prev.generated_case,\n      challenges: response.challenges || []\n    },\n    extraction_metadata: prev.extraction_metadata\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -14224,
+          7520
+        ],
+        "id": "14_MERGE_Node6_Output",
+        "name": "6b.3_MRG_Challenge",
+        "notes": "Merges challenges into generated_case.challenges"
+      },
+      {
+        "parameters": {
+          "jsCode": "// FORMAT Node 6c: Build prompt for conclusion writing\nconst input = $input.first().json;\nconst ctx = input.case_study_context;\nconst genCase = input.generated_case;\n\nconst constraints = ctx.case_design_constraints || ctx.design_constraints || {};\nconst situation = genCase.situation || '';\nconst introduction = genCase.introduction || {};\nconst challenges = genCase.challenges || [];\n\nconst wordLimits = constraints.word_limits || { conclusion: 60 };\n\nconst prompt = `You are a case study writer. Write the CONCLUSION section only.\n\n## SITUATION\n${situation}\n\n## INTRODUCTION\n${JSON.stringify(introduction, null, 2)}\n\n## CHALLENGES\n${JSON.stringify(challenges, null, 2)}\n\n## WORD LIMIT\n${wordLimits.conclusion} words\n\n## YOUR TASK\n\nWrite a conclusion that:\n1. Opens with ONE sentence restating market/business pressure\n2. Provides 2-3 \"from → to\" growth arcs (each mapping to ONE challenge)\n\n### Growth Arc Format\nEach arc must:\n- Be specific to ONE challenge\n- Show concrete \"from X to Y\" transformation\n- Be measurable or observable\n- NOT be generic (\"became better leader\")\n\nExample (good):\n\"Challenge 1: From missing cross-team dependencies (3-week delay) to proactive workstream coordination\"\n\nExample (bad):\n\"Improved planning and organization skills\"\n\n## RULES\n- NO new information or characters\n- NO future predictions or advice\n- Growth arcs must be SPECIFIC to challenge events\n- Must stay under ${wordLimits.conclusion} words\n\n## OUTPUT\nReturn valid JSON only:\n{\n  \"conclusion\": \"string (~${wordLimits.conclusion} words)\"\n}\n`;\n\nreturn [{ json: {\n  prompt: prompt,\n  model: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',\n  node_name: 'Node6c_Conclusion',\n  workflow_session_id: ctx.workflow_session_id,\n  workflow_id: ctx.workflow_id,\n  project_id: ctx.project_id,\n  client_id: ctx.client_id\n}}];"
+        },
+        "id": "node6c1",
+        "name": "6c.1_FMT_Conclusion",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2600,
+          300
+        ],
+        "notes": "Builds prompt for conclusion writing with growth arcs (Stage 6c)"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "GDaWNcJJtLdY8Q6Y4Yv5p"
+          }
+        },
+        "id": "node6c2",
+        "name": "6c.2_LLM_Conclusion",
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.1,
+        "position": [
+          2800,
+          300
+        ],
+        "notes": "Calls LLM to write conclusion",
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 5000,
+        "onError": "continueErrorOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// MERGE Node 6c: Add conclusion to generated_case\nconst llmResult = $input.first().json;\nconst prev = $('6b.3_MRG_Challenge').first().json;\n\nif (!llmResult.llm_response) {\n  throw new Error('Node 6c LLM response missing');\n}\n\nreturn [{\n  json: {\n    reference_case_text: prev.reference_case_text,\n    case_study_context: prev.case_study_context,\n    generated_case: {\n      ...prev.generated_case,\n      conclusion: llmResult.llm_response.conclusion || ''\n    },\n    extraction_metadata: prev.extraction_metadata\n  }\n}];"
+        },
+        "id": "node6c3",
+        "name": "6c.3_MRG_Conclusion",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3000,
+          300
+        ],
+        "notes": "Merges conclusion into generated_case.conclusion"
+      },
+      {
+        "parameters": {
+          "jsCode": "// FORMAT Node 7: Build question generation prompt\nconst input = $input.first().json;\nconst ctx = input.case_study_context;\nconst genCase = input.generated_case;\nconst constraints = ctx.case_design_constraints || ctx.design_constraints || {};\nconst behaviorMapping = genCase.behavior_mapping || {};\nconst challenges = genCase.challenges || [];\nconst conclusion = genCase.conclusion || '';\n\nconst wordLimits = constraints.word_limits || { per_question: 40 };\n\nconst prompt = `Generate assessment questions for this case study.\n\nCHALLENGES:\n${JSON.stringify(challenges, null, 2)}\n\nQUESTION MAP:\n${JSON.stringify(behaviorMapping.questions || [], null, 2)}\n\nHIDE BEHAVIORS: ${ctx.hide_behaviors_in_questions}\n\n## OUTPUT FORMAT\nEach question has TWO parts:\n\n**Situation Summary (2-3 sentences):**\n- Recap challenge with EXACT names, numbers, metrics from challenge content\n- Set context for the question\n- Use past tense\n\n**Question (1-2 sentences):**\n- Direct question starting with \"What should...\" or \"How would you...\"\n- Must require: people dimension + strategy dimension + execution dimension\n\n## ASSESSOR GUIDANCE (per question, 100-150 words each)\n\nFor each question, provide:\n- **Strong Response Demonstrates**: What behaviors/thinking to look for\n- **Weak Response Looks Like**: Common inadequate approaches\n- **Common Pitfalls**: Traps candidates fall into\n- **Rating Differentiation**: How to distinguish 3/5 from 4/5 from 5/5\n\n**Overall Assessor Guidance (100-150 words):**\n- Holistic interpretation approach\n- Rating scale consistency\n- Red flags to watch for\n\nRULES:\n- ${wordLimits.per_question} words per question (situation summary + question combined)\n- Each question tests 2-3 behaviors from its mapped challenge\n- Use specific names, numbers, stakes from the challenge text\n- Simple language, short sentences\n\nReturn JSON only:\n{\n  \"questions\": [\n    {\n      \"number\": 1,\n      \"challenge_number\": 1,\n      \"situation_summary\": \"string (2-3 sentences)\",\n      \"question\": \"string\",\n      \"behaviors_tested\": [\"name1\", \"name2\"]\n    }\n  ],\n  \"assessor_guidance\": {\n    \"overall\": \"string (100-150 words)\",\n    \"per_question\": [\n      {\"number\": 1, \"guidance\": \"string (100-150 words)\"}\n    ]\n  }\n}\n`;\n\nreturn [{ json: {\n  prompt: prompt,\n  model: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',\n  node_name: 'Node7_Questions',\n  workflow_session_id: ctx.workflow_session_id,\n  workflow_id: ctx.workflow_id,\n  project_id: ctx.project_id,\n  client_id: ctx.client_id\n}}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -14000,
+          7520
+        ],
+        "id": "fbcb96e4-90c0-4d6f-a19a-b00274309bf7",
+        "name": "7.1_FMT_Questions",
+        "notes": "Stage 7: Builds prompt for question generation with assessor guidance (~100-150 words per question) (Sonnet)"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "GDaWNcJJtLdY8Q6Y4Yv5p"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.1,
+        "position": [
+          -13776,
+          7520
+        ],
+        "id": "59f7ef8c-fc50-433c-98c0-96d0ca6f7aa4",
+        "name": "7.2_LLM_Questions",
+        "notes": "Calls LLM to create questions and generate assessor guidance with rating indicators"
+      },
+      {
+        "parameters": {
+          "jsCode": "// MERGE Node 7: Add questions and assessor guidance to generated_case\nconst llmResult = $input.first().json;\nconst prev = $('6c.3_MRG_Conclusion').first().json;\n\nif (!llmResult.llm_response) {\n  throw new Error('Node 7 LLM response missing');\n}\n\nconst response = llmResult.llm_response;\n\nreturn [{\n  json: {\n    reference_case_text: prev.reference_case_text,\n    case_study_context: prev.case_study_context,\n    generated_case: {\n      ...prev.generated_case,\n      assessment_questions: response.questions || [],\n      assessor_guidance: response.assessor_guidance || {}\n    },\n    extraction_metadata: prev.extraction_metadata\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -13552,
+          7448
+        ],
+        "id": "16_MERGE_Node8_Output",
+        "name": "7.3_MRG_Questions",
+        "notes": "Merges questions into generated_case.assessment_questions, generated_case.assessor_guidance, generated_case.coverage_validation"
+      },
+      {
+        "parameters": {
+          "jsCode": "// FORMAT Node 8: Build quality check prompt\nconst input = $input.first().json;\nconst ctx = input.case_study_context;\nconst genCase = input.generated_case;\nconst constraints = ctx.case_design_constraints || ctx.design_constraints || {};\n\nconst situation = genCase.situation || '';\nconst introduction = genCase.introduction || {};\nconst challenges = genCase.challenges || [];\nconst conclusion = genCase.conclusion || '';\nconst questions = genCase.questions || [];\n\nconst behaviorNames = (ctx.behaviors || []).map(b => b.name).join(', ');\nconst wordLimits = constraints.word_limits || {};\n\n// Extract 3-4 key theme lines from project_memory\nconst projectMemoryLines = (ctx.project_memory || '').split('\\n').slice(0, 4).join('\\n');\n\nconst prompt = `Quality-check this case study against the checklist below. For each failed check, provide the fix.\n\nCASE STUDY:\n- Situation: ${situation}\n- Introduction: ${JSON.stringify(introduction, null, 2)}\n- Challenges: ${JSON.stringify(challenges, null, 2)}\n- Conclusion: ${conclusion}\n- Questions: ${JSON.stringify(questions, null, 2)}\n\nCONTEXT:\n- Behaviors: ${behaviorNames}\n- Industry: ${ctx.industry} | Level: ${ctx.target_level}\n- FGD Points: ${JSON.stringify(constraints.fgd_integration_points || [], null, 2)}\n- Project Memory Key Themes: ${projectMemoryLines}\n\nCHECKLIST:\n\n1. STRUCTURE & WORD LIMITS\n   - Situation ≤ ${wordLimits.situation || 130} words\n   - Introduction total ≤ ${(wordLimits.introduction_overview || 60) + (wordLimits.introduction_market || 60) + (wordLimits.introduction_initiative || 40) + (wordLimits.introduction_team_targets || 40)} words\n   - Each challenge ≤ ${wordLimits.per_challenge || 200} words\n   - Conclusion ≤ ${wordLimits.conclusion || 60} words\n   - Each question ≤ ${wordLimits.per_question || 40} words\n\n2. CHARACTER CONTINUITY\n   - Every named character in challenges was introduced in the Situation\n   - No new characters appear in challenges without prior introduction\n\n3. BEHAVIOR COVERAGE\n   - Every behavior appears in at least one challenge\n   - Every behavior is tested by at least one question\n   - No behavior is missing from the full question set\n\n4. FGD INCORPORATION\n   - Each FGD integration point is reflected in at least one challenge scenario\n   - Challenges reflect the real organizational issues, not generic problems\n\n5. NARRATIVE QUALITY\n   - At least one challenge shows the reader's own leadership failure with a specific quote/action\n   - Consequences are quantified (numbers, days, money, customers)\n   - At least one named customer with profile/deal value\n   - At least one competitor from Introduction referenced in a challenge\n   - Challenges interconnect (shared characters or cascading consequences)\n\n6. REGIONAL & ROLE RELEVANCE\n   - Products, services, designations exist in the target industry/region\n   - Challenge complexity matches ${ctx.target_level}\n   - No strategic decisions given to junior roles (unless FGD says so)\n\n7. LANGUAGE & TENSE\n   - Simple, accessible language throughout\n   - Short sentences (flag any sentence > 20 words)\n   - Present continuous or past tense only — flag any simple present\n   - Industry terms have parenthetical explanations\n\n8. CONCLUSION QUALITY\n   - Contains \"from → to\" growth arcs (not generic statements)\n   - Each arc maps to a specific challenge\n   - No new information introduced\n\n9. QUESTION QUALITY\n   - Each situation summary uses specific names/numbers from the challenge\n   - Questions require multi-dimensional answers (people + strategy + execution)\n\n10. CONSISTENCY\n   - KPI numbers match between Introduction, challenges, and questions\n   - Character names spelled consistently\n   - No artifacts from reference case study (wrong industry terms, original company name)\n\n11. DATA PRESENTATION\n    - Any table/data has context before and after it\n    - Headings, units are proper and relevant\n\nFor each failed check, return the check number, what failed, and the corrected content.\n\nReturn JSON only:\n{\n  \"quality_result\": {\n    \"passed\": [\"1\", \"2\", \"3\"],\n    \"failed\": [\"4\", \"7\"],\n    \"fixes_applied\": [\n      {\n        \"location\": \"string (e.g., 'challenges[0].content')\",\n        \"change\": \"string (what was fixed)\"\n      }\n    ]\n  }\n}\n`;\n\nreturn [{ json: {\n  prompt: prompt,\n  model: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',\n  node_name: 'Node8_Quality',\n  workflow_session_id: ctx.workflow_session_id,\n  workflow_id: ctx.workflow_id,\n  project_id: ctx.project_id,\n  client_id: ctx.client_id\n}}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -13328,
+          7448
+        ],
+        "id": "d64fb592-4758-4226-9828-6f6f8156d74e",
+        "name": "8.1_FMT_Quality",
+        "notes": "Stage 8: Builds prompt for 16-criteria quality scoring with auto-fix for scores < 8 (Haiku)"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "GDaWNcJJtLdY8Q6Y4Yv5p"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.1,
+        "position": [
+          -13104,
+          7448
+        ],
+        "id": "6f179d84-eff0-4cf2-a0c4-ed3d4353e45a",
+        "name": "8.2_LLM_Quality",
+        "notes": "Calls LLM for quality scoring: A1-A7 (Case Body), B1-B5 (Questions), C1-C2 (Coverage), D1-D2 (Guidance)"
+      },
+      {
+        "parameters": {
+          "jsCode": "// MERGE Node 8: Apply quality fixes\nconst llmResult = $input.first().json;\nconst prev = $('7.3_MRG_Questions').first().json;\n\nif (!llmResult.llm_response) {\n  throw new Error('Node 8 LLM response missing');\n}\n\nconst qcResult = llmResult.llm_response.quality_result || {};\n\n// Apply fixes to generated_case\n// (In real implementation, parse qcResult.fixes_applied and apply them)\n// For now, just pass through with QC result attached\n\nreturn [{\n  json: {\n    reference_case_text: prev.reference_case_text,\n    case_study_context: prev.case_study_context,\n    generated_case: {\n      ...prev.generated_case,\n      quality_result: qcResult\n    },\n    extraction_metadata: prev.extraction_metadata\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -12880,
+          7376
+        ],
+        "id": "17_MERGE_Node9_Output",
+        "name": "8.3_MRG_Quality",
+        "notes": "Merges quality scores into generated_case.quality_scores, generated_case.quality_assured_content, generated_case.fixes_applied"
+      },
+      {
+        "parameters": {
+          "jsCode": "// FORMAT Node 9: Build bias check prompt\nconst input = $input.first().json;\nconst ctx = input.case_study_context;\nconst genCase = input.generated_case;\n\nconst situation = genCase.situation || '';\nconst introduction = genCase.introduction || {};\nconst challenges = genCase.challenges || [];\nconst conclusion = genCase.conclusion || '';\nconst questions = genCase.questions || [];\n\n// Concatenate all sections\nconst introText = [\n  introduction.company_overview,\n  introduction.market_context,\n  introduction.strategic_initiative,\n  introduction.team_and_targets\n].filter(Boolean).join('\\n\\n');\n\nconst challengesText = challenges.map(c => `## Challenge ${c.number}: ${c.title}\\n${c.content}`).join('\\n\\n');\nconst questionsText = questions.map(q => `Q${q.number}: ${q.situation_summary} ${q.question}`).join('\\n\\n');\n\nconst fullText = `${situation}\\n\\n${introText}\\n\\n${challengesText}\\n\\n${conclusion}\\n\\n${questionsText}`;\n\nconst prompt = `Check this case study for bias. Fix any issues found.\n\nFULL CASE STUDY TEXT:\n${fullText}\n\nINDUSTRY: ${ctx.industry} | LEVEL: ${ctx.target_level}\n\nCheck for:\n1. Gender bias — names, roles, pronouns skewing one direction\n2. Cultural/regional bias — assumptions not applicable to target region\n3. Age bias — stereotyping based on experience/seniority\n4. Cognitive bias in scenarios — are \"correct\" answers too obvious or is one perspective unfairly advantaged?\n\nRULES:\n- Do not change word counts significantly\n- Preserve all character names and plot points\n- Only fix genuine bias issues, not stylistic preferences\n- Maintain present continuous / past tense\n\n## OUTPUT FORMAT\n\nReturn ONLY:\n{\n  \"bias_check\": {\n    \"status\": \"pass\",\n    \"issues_found\": 0,\n    \"modifications\": [\n      {\n        \"location\": \"situation | introduction.company_overview | challenges[0].content | etc.\",\n        \"find\": \"exact text to find\",\n        \"replace\": \"replacement text\"\n      }\n    ]\n  }\n}\n\nDO NOT return full content. Return ONLY the modifications array.\n`;\n\nreturn [{ json: {\n  prompt: prompt,\n  model: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',\n  node_name: 'Node9_Bias',\n  workflow_session_id: ctx.workflow_session_id,\n  workflow_id: ctx.workflow_id,\n  project_id: ctx.project_id,\n  client_id: ctx.client_id\n}}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -12656,
+          7376
+        ],
+        "id": "880281f3-4eb3-4eb2-b1e4-28d261c2f329",
+        "name": "9.1_FMT_Bias",
+        "notes": "Stage 9: Builds prompt for bias screening across 8 categories with remediation (Haiku)"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "GDaWNcJJtLdY8Q6Y4Yv5p"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.1,
+        "position": [
+          -12432,
+          7376
+        ],
+        "id": "e523cd58-6766-4e8c-a3f4-d6c2d8c31064",
+        "name": "9.2_LLM_Bias",
+        "notes": "Calls LLM to check for cultural, gender, age, socioeconomic, religious, disability, regional, and racial bias"
+      },
+      {
+        "parameters": {
+          "jsCode": "// MERGE Node 9: Apply bias fixes with fallback\nconst llmResult = $input.first().json;\nconst prev = $('8.3_MRG_Quality').first().json;\n\nif (!llmResult.llm_response) {\n  throw new Error('Node 9 LLM response missing');\n}\n\nconst biasCheck = llmResult.llm_response;\nlet genCase = { ...prev.generated_case };\nconst content = genCase.final_content || genCase.quality_assured_content || {};\n\n// Helper to apply text replacement safely\nfunction applyReplacement(text, find, replace) {\n  if (!text || typeof text !== 'string') return text;\n  if (!find) return text;\n  \n  try {\n    // Escape special regex characters in find string\n    const escapedFind = find.replace(/[.*+?^()|[\\\\]\\\\\\\\]/g, '\\\\\\\\\\\\$&');\n    const regex = new RegExp(escapedFind, 'gi');\n    return text.replace(regex, replace || '');\n  } catch (e) {\n    // Fallback to simple string replace if regex fails\n    return text.split(find).join(replace || '');\n  }\n}\n\n// Helper function to recursively search and replace in all string fields\nfunction globalReplace(obj, find, replace) {\n  if (typeof obj === 'string') {\n    return applyReplacement(obj, find, replace);\n  }\n  if (Array.isArray(obj)) {\n    return obj.map(item => globalReplace(item, find, replace));\n  }\n  if (obj && typeof obj === 'object') {\n    const result = {};\n    for (const key in obj) {\n      result[key] = globalReplace(obj[key], find, replace);\n    }\n    return result;\n  }\n  return obj;\n}\n\n// Apply each modification\nconst modifications = biasCheck.modifications || [];\nmodifications.forEach(mod => {\n  if (!mod.find || !mod.replace) return;\n  \n  let applied = false;\n  const location = mod.location || '';\n  \n  // Try to apply to specific location first\n  if (location.includes('situation') && genCase.situation) {\n    genCase.situation = applyReplacement(genCase.situation, mod.find, mod.replace);\n    applied = true;\n  } else if (location.includes('introduction')) {\n    if (typeof genCase.introduction === 'object') {\n      // Handle 4-part introduction object\n      if (location.includes('company_overview') && genCase.introduction.company_overview) {\n        genCase.introduction.company_overview = applyReplacement(genCase.introduction.company_overview, mod.find, mod.replace);\n        applied = true;\n      } else if (location.includes('market_context') && genCase.introduction.market_context) {\n        genCase.introduction.market_context = applyReplacement(genCase.introduction.market_context, mod.find, mod.replace);\n        applied = true;\n      } else if (location.includes('strategic_initiative') && genCase.introduction.strategic_initiative) {\n        genCase.introduction.strategic_initiative = applyReplacement(genCase.introduction.strategic_initiative, mod.find, mod.replace);\n        applied = true;\n      } else if (location.includes('team_and_targets') && genCase.introduction.team_and_targets) {\n        genCase.introduction.team_and_targets = applyReplacement(genCase.introduction.team_and_targets, mod.find, mod.replace);\n        applied = true;\n      }\n    } else if (typeof genCase.introduction === 'string') {\n      genCase.introduction = applyReplacement(genCase.introduction, mod.find, mod.replace);\n      applied = true;\n    }\n  } else if (location.includes('challenge')) {\n    const challengeMatch = location.match(/challenges?\\\\[?(\\\\d+)\\\\]?/);\n    if (challengeMatch && genCase.challenges) {\n      const idx = parseInt(challengeMatch[1]);\n      if (genCase.challenges[idx]?.content) {\n        genCase.challenges[idx].content = applyReplacement(genCase.challenges[idx].content, mod.find, mod.replace);\n        applied = true;\n      }\n    }\n  } else if (location.includes('conclusion') && genCase.conclusion) {\n    genCase.conclusion = applyReplacement(genCase.conclusion, mod.find, mod.replace);\n    applied = true;\n  } else if (location.includes('question')) {\n    const questionMatch = location.match(/questions?\\\\[?(\\\\d+)\\\\]?/);\n    if (questionMatch && genCase.assessment_questions) {\n      const idx = parseInt(questionMatch[1]);\n      if (genCase.assessment_questions[idx]?.text) {\n        genCase.assessment_questions[idx].text = applyReplacement(genCase.assessment_questions[idx].text, mod.find, mod.replace);\n        applied = true;\n      }\n    }\n  }\n  \n  // Fallback: If specific location failed or not found, do global search and replace\n  if (!applied) {\n    if (genCase.situation) {\n      genCase.situation = globalReplace(genCase.situation, mod.find, mod.replace);\n    }\n    if (genCase.introduction) {\n      genCase.introduction = globalReplace(genCase.introduction, mod.find, mod.replace);\n    }\n    if (genCase.challenges) {\n      genCase.challenges = globalReplace(genCase.challenges, mod.find, mod.replace);\n    }\n    if (genCase.conclusion) {\n      genCase.conclusion = globalReplace(genCase.conclusion, mod.find, mod.replace);\n    }\n    if (genCase.assessment_questions) {\n      genCase.assessment_questions = globalReplace(genCase.assessment_questions, mod.find, mod.replace);\n    }\n  }\n});\n\n// Store bias check results\ngenCase.bias_check = biasCheck;\ngenCase.bias_passed = (biasCheck.status === 'pass') || (biasCheck.issues_found === 0);\ngenCase.high_severity_issues = biasCheck.high_severity_count || 0;\n\n// Create final content with all bias fixes applied\ngenCase.final_content = {\n  situation: genCase.situation,\n  introduction: genCase.introduction,\n  challenges: genCase.challenges,\n  conclusion: genCase.conclusion,\n  questions: genCase.assessment_questions,\n  assessor_guidance: genCase.assessor_guidance\n};\n\nreturn [{\n  json: {\n    reference_case_text: prev.reference_case_text,\n    case_study_context: prev.case_study_context,\n    generated_case: genCase,\n    extraction_metadata: prev.extraction_metadata\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -12208,
+          7328
+        ],
+        "id": "19_MERGE_Node11_Output",
+        "name": "9.3_MRG_Bias",
+        "notes": "Applies bias modifications to content and stores in generated_case.final_content"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Stage 10: Final Packaging - Fixed for Stage 6a/6b/6c split\n// Assembles final_output from generated_case with proper situation/introduction/conclusion handling\n\nconst prev = $input.first().json;\nconst genCase = prev.generated_case || {};\nconst ctx = prev.case_study_context || {};\nconst constraints = ctx.case_design_constraints || ctx;\n\n// Get content from final_content (bias output) or fallback chain\nconst content = genCase.final_content || genCase.quality_assured_content || {};\n\n// Extract Stage 6 split fields with proper fallbacks\nconst situation = content.situation || genCase.situation || '';\nconst introObj = content.introduction || genCase.introduction || {};\nconst challenges = content.challenges || genCase.final_challenges || genCase.challenges || [];\nconst conclusion = content.conclusion || genCase.conclusion || '';\nconst questions = content.questions || genCase.assessment_questions || [];\nconst assessorGuidance = content.assessor_guidance || genCase.assessor_guidance || {};\n\n// Build formatted introduction text for legacy systems\nfunction formatIntroduction(intro) {\n  if (typeof intro === 'string') return intro;\n  if (!intro || typeof intro !== 'object') return '';\n  \n  const parts = [];\n  if (intro.company_overview) parts.push(intro.company_overview);\n  if (intro.market_context) parts.push(intro.market_context);\n  if (intro.strategic_initiative) parts.push(intro.strategic_initiative);\n  if (intro.team_and_targets) parts.push(intro.team_and_targets);\n  \n  return parts.join('\\n\\n');\n}\n\nconst formattedIntro = formatIntroduction(introObj);\n\n// Calculate total word count for case_length\nconst totalWords = challenges.reduce((sum, c) => sum + (c.word_count || c.content?.split(/\\s+/).length || 175), 0);\nconst caseLength = totalWords < 600 ? 'short' : totalWords > 900 ? 'long' : 'medium';\n\n// Generate professional title\nconst industry = constraints.industry || ctx.industry || 'Business';\nconst firstChallengeTitle = challenges[0]?.title || 'Strategic Decision Making';\nconst title = industry + ' Leadership Case: ' + firstChallengeTitle.replace(/^Challenge \\d+:\\s*/i, '');\n\n// Calculate quality summary from quality_scores\nconst qualityScores = genCase.quality_scores || {};\nconst scoreValues = qualityScores.scores || qualityScores;\nconst allScores = Object.entries(scoreValues)\n  .filter(([k, v]) => typeof v === 'number' && !k.includes('average') && !k.includes('overall'))\n  .map(([k, v]) => v);\nconst overallRating = allScores.length > 0 ? Math.min(...allScores) : 8;\nconst avgRating = allScores.length > 0 ? allScores.reduce((a, b) => a + b, 0) / allScores.length : 8;\nconst passedChecks = allScores.filter(s => s >= 8).length;\n\n// Behavior coverage from mapping\nconst behaviorMapping = genCase.behavior_mapping || {};\nconst behaviorsList = (behaviorMapping.behaviors || behaviorMapping.mapped_behaviors || [])\n  .map(b => typeof b === 'string' ? b : b.name || b.behavior_name)\n  .filter(Boolean);\n\n// Bias check results\nconst passedBias = genCase.bias_passed !== false && (genCase.high_severity_issues || 0) === 0;\n\n// Build coverage distribution by challenge\nconst distribution = {};\nchallenges.forEach((c, i) => {\n  const behaviors = (c.behaviors_assessed || []).map(b => typeof b === 'string' ? b : b.name).filter(Boolean);\n  distribution['challenge_' + (i + 1)] = behaviors;\n});\n\n// Generate recommendations based on target level\nconst targetLevel = constraints.target_level || 'Mid';\nconst recommendations = [];\nif (targetLevel === 'Low') {\n  recommendations.push('Suitable for entry-level candidates with 0-2 years experience');\n  recommendations.push('Allow additional time for candidates to process information');\n} else if (targetLevel === 'Mid') {\n  recommendations.push('Appropriate for mid-level candidates with 3-7 years experience');\n  recommendations.push('Expect balanced responses showing both analytical and people skills');\n} else if (targetLevel === 'High') {\n  recommendations.push('Designed for senior candidates with 8+ years experience');\n  recommendations.push('Look for strategic thinking and enterprise-level considerations');\n} else if (targetLevel === 'Exceptional') {\n  recommendations.push('Reserved for executive-level assessment');\n  recommendations.push('Expect sophisticated multi-stakeholder analysis and visionary solutions');\n}\nif (!passedBias) {\n  recommendations.push('Review bias check notes before deployment');\n}\n\n// Add legacy_text to each challenge for backward compatibility\nconst enhancedChallenges = challenges.map((c, idx) => ({\n  ...c,\n  legacy_text: c.content || c.text || ''\n}));\n\n// Assemble final_output (what goes to API)\nconst final_output = {\n  case_study_metadata: {\n    title: title,\n    created_at: new Date().toISOString(),\n    version: '1.0',\n    case_length: caseLength\n  },\n  case_study_context: {\n    workflow_session_id: ctx.workflow_session_id,\n    workflow_id: ctx.workflow_id,\n    project_id: ctx.project_id,\n    client_id: ctx.client_id,\n    case_design_constraints: constraints\n  },\n  case_study_content: {\n    situation: situation,\n    introduction: introObj,\n    legacy_introduction: [situation, formattedIntro, conclusion].filter(Boolean).join('\\n\\n').trim(),\n    challenges: enhancedChallenges,\n    conclusion: conclusion\n  },\n  assessment_questions: questions,\n  assessor_guidance: assessorGuidance,\n  quality_summary: {\n    overall_rating: Math.round(overallRating * 10) / 10,\n    average_rating: Math.round(avgRating * 10) / 10,\n    total_checks_passed: passedChecks,\n    total_checks_conducted: 16,\n    passed_quality_check: overallRating >= 8,\n    passed_bias_check: passedBias,\n    total_behaviors_covered: behaviorsList.length,\n    unique_behaviors: behaviorsList.length,\n    behaviors_list: behaviorsList,\n    behavior_coverage_analysis: {\n      coverage_percentage: '100%',\n      distribution: distribution\n    },\n    recommendations_for_deployment: recommendations\n  }\n};\n\nreturn [{\n  json: {\n    status: 'success',\n    final_output: final_output,\n    // Keep generated_case as internal trace\n    generated_case: genCase,\n    reference_case_text: prev.reference_case_text,\n    extraction_metadata: prev.extraction_metadata,\n    delivery_ready: true\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -11984,
+          7328
+        ],
+        "id": "df2d2236-0f0c-4163-af68-104bd9971910",
+        "name": "10.1_JS_Package",
+        "notes": "Stage 10: Assembles final_output in JavaScript - generates metadata, structures content, calculates quality_summary (no LLM)"
+      },
+      {
+        "parameters": {
+          "jsCode": "// ERROR Response - Safely serialize error objects\nconst input = $input.first().json;\n\n// Helper to safely extract error information\nfunction safeErrorExtract(error) {\n  if (!error) return null;\n  \n  // If it's an Error object, extract its properties safely\n  if (error instanceof Error || error.message) {\n    return {\n      message: error.message || 'Unknown error',\n      name: error.name,\n      stack: error.stack,\n      code: error.code,\n      // Extract any additional enumerable properties\n      ...Object.keys(error).reduce((acc, key) => {\n        try {\n          acc[key] = error[key];\n        } catch (e) {\n          // Skip read-only properties\n        }\n        return acc;\n      }, {})\n    };\n  }\n  \n  // If it's already a plain object, return as-is\n  return error;\n}\n\nconst errorInfo = safeErrorExtract(input);\n\nreturn [{\n  json: {\n    status: 'error',\n    message: errorInfo?.message || input?.error_message || 'Workflow execution failed',\n    error_type: input?.error_type || 'execution_error',\n    error_details: errorInfo,\n    node_name: $node.name,\n    timestamp: new Date().toISOString()\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -12208,
+          7976
+        ],
+        "id": "032e9f56-43e4-489b-92e6-f92b1e529717",
+        "name": "11.1_ERR_Response",
+        "notes": "Formats error response with type, message, node, and timestamp"
+      },
+      {
+        "parameters": {
+          "method": "PUT",
+          "url": "=https://coreapi.ur-nl.com/workflow_sessions/{{ $('1.1_TRG_Webhook').item.json.body.workflow_session_id }}",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-Subdomain",
+                "value": "dashboard"
+              }
+            ]
+          },
+          "sendBody": true,
+          "contentType": "raw",
+          "rawContentType": "application/json",
+          "body": "={\n  \"workflow_session\": {\n    \"status\": \"error\",\n    \"error_message\": \"{{ $json.error.message }}\",\n    \"error_type\": \"{{ $json.error.type }}\",\n    \"error_node\": \"{{ $json.error.node }}\",\n    \"n8n_workflow_execution_id\": \"{{ $execution.id }}\",\n    \"n8n_workflow_execution_url\": \"https://workflows.ur-nl.com/executions/{{ $execution.id }}\"\n  }\n}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.3,
+        "position": [
+          -11984,
+          7976
+        ],
+        "id": "61243400-650e-486c-97c3-6b0d1c182e84",
+        "name": "11.1b_API_Error",
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "9fZP8bOKRNJtilO1",
+            "name": "Jombay Staging API"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "method": "PUT",
+          "url": "=https://coreapi.ur-nl.com/workflow_sessions/{{ $('1.1_TRG_Webhook').item.json.body.workflow_session_id }}",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-Subdomain",
+                "value": "dashboard"
+              }
+            ]
+          },
+          "sendBody": true,
+          "contentType": "raw",
+          "rawContentType": "application/json",
+          "body": "={\n  \"workflow_session\": {\n    \"output_json\": {{ JSON.stringify($json.final_output) }},\n    \"status\": \"completed\",\n    \"n8n_workflow_execution_id\": \"{{ $execution.id }}\",\n    \"n8n_workflow_execution_url\": \"https://workflows.ur-nl.com/executions/{{ $execution.id }}\"\n  }\n}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.3,
+        "position": [
+          -11760,
+          7328
+        ],
+        "id": "a6b620e8-77ee-4526-9da0-a812bf1c472f",
+        "name": "10.2_API_Success",
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "9fZP8bOKRNJtilO1",
+            "name": "Jombay Staging API"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "1.1_TRG_Webhook": {
+        "main": [
+          [
+            {
+              "node": "1.2_VAL_Input",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "1.2_VAL_Input": {
+        "main": [
+          [
+            {
+              "node": "1.3_IF_Valid",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "1.3_IF_Valid": {
+        "main": [
+          [
+            {
+              "node": "1.4_FMT_DriveUtils",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "11.1_ERR_Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "1.4_FMT_DriveUtils": {
+        "main": [
+          [
+            {
+              "node": "1.5_SUB_DriveUtils",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "1.5_SUB_DriveUtils": {
+        "main": [
+          [
+            {
+              "node": "1.6_VAL_Extraction",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "1.6_VAL_Extraction": {
+        "main": [
+          [
+            {
+              "node": "1.7_IF_Extracted",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "1.7_IF_Extracted": {
+        "main": [
+          [
+            {
+              "node": "2.1_FMT_Context",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "11.1_ERR_Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "2.1_FMT_Context": {
+        "main": [
+          [
+            {
+              "node": "2.2_LLM_Context",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "2.2_LLM_Context": {
+        "main": [
+          [
+            {
+              "node": "2.3_MRG_Context",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "11.1_ERR_Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "2.3_MRG_Context": {
+        "main": [
+          [
+            {
+              "node": "3.1_FMT_ParseRef",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "3.1_FMT_ParseRef": {
+        "main": [
+          [
+            {
+              "node": "3.2_LLM_ParseRef",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "3.2_LLM_ParseRef": {
+        "main": [
+          [
+            {
+              "node": "3.3_MRG_ParseRef",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "11.1_ERR_Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "3.3_MRG_ParseRef": {
+        "main": [
+          [
+            {
+              "node": "4.1_FMT_Industry",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "4.1_FMT_Industry": {
+        "main": [
+          [
+            {
+              "node": "4.2_LLM_Industry",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "4.2_LLM_Industry": {
+        "main": [
+          [
+            {
+              "node": "4.3_MRG_Industry",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "11.1_ERR_Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "4.3_MRG_Industry": {
+        "main": [
+          [
+            {
+              "node": "5.1_FMT_Behavior",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "5.1_FMT_Behavior": {
+        "main": [
+          [
+            {
+              "node": "5.2_LLM_Behavior",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "5.2_LLM_Behavior": {
+        "main": [
+          [
+            {
+              "node": "5.3_MRG_Behavior",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "11.1_ERR_Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "5.3_MRG_Behavior": {
+        "main": [
+          [
+            {
+              "node": "6a.1_FMT_SituationIntro",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "6b.1_FMT_Challenge": {
+        "main": [
+          [
+            {
+              "node": "6b.2_LLM_Challenge",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "6b.2_LLM_Challenge": {
+        "main": [
+          [
+            {
+              "node": "6b.3_MRG_Challenge",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "11.1_ERR_Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "6b.3_MRG_Challenge": {
+        "main": [
+          [
+            {
+              "node": "6c.1_FMT_Conclusion",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "7.1_FMT_Questions": {
+        "main": [
+          [
+            {
+              "node": "7.2_LLM_Questions",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "7.2_LLM_Questions": {
+        "main": [
+          [
+            {
+              "node": "7.3_MRG_Questions",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "11.1_ERR_Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "7.3_MRG_Questions": {
+        "main": [
+          [
+            {
+              "node": "8.1_FMT_Quality",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "8.1_FMT_Quality": {
+        "main": [
+          [
+            {
+              "node": "8.2_LLM_Quality",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "8.2_LLM_Quality": {
+        "main": [
+          [
+            {
+              "node": "8.3_MRG_Quality",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "11.1_ERR_Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "8.3_MRG_Quality": {
+        "main": [
+          [
+            {
+              "node": "9.1_FMT_Bias",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "9.1_FMT_Bias": {
+        "main": [
+          [
+            {
+              "node": "9.2_LLM_Bias",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "9.2_LLM_Bias": {
+        "main": [
+          [
+            {
+              "node": "9.3_MRG_Bias",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "11.1_ERR_Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "9.3_MRG_Bias": {
+        "main": [
+          [
+            {
+              "node": "10.1_JS_Package",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "10.1_JS_Package": {
+        "main": [
+          [
+            {
+              "node": "10.2_API_Success",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "11.1_ERR_Response": {
+        "main": [
+          [
+            {
+              "node": "11.1b_API_Error",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "6a.1_FMT_SituationIntro": {
+        "main": [
+          [
+            {
+              "node": "6a.2_LLM_SituationIntro",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "6a.2_LLM_SituationIntro": {
+        "main": [
+          [
+            {
+              "node": "6a.3_MRG_SituationIntro",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "6a.3_MRG_SituationIntro": {
+        "main": [
+          [
+            {
+              "node": "6b.1_FMT_Challenge",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "6c.1_FMT_Conclusion": {
+        "main": [
+          [
+            {
+              "node": "6c.2_LLM_Conclusion",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "6c.2_LLM_Conclusion": {
+        "main": [
+          [
+            {
+              "node": "6c.3_MRG_Conclusion",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "6c.3_MRG_Conclusion": {
+        "main": [
+          [
+            {
+              "node": "7.1_FMT_Questions",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Niket Puranik",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-02-24T06:22:22.371Z",
+        "id": 4794,
+        "workflowId": "Havb102ZBST1xaeHDhnAK",
+        "versionId": "711c72e3-0d2a-41bd-bcab-04a947729dae",
+        "event": "deactivated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-24T06:22:22.393Z",
+        "id": 4795,
+        "workflowId": "Havb102ZBST1xaeHDhnAK",
+        "versionId": "711c72e3-0d2a-41bd-bcab-04a947729dae",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-24T07:16:23.450Z",
+        "id": 4876,
+        "workflowId": "Havb102ZBST1xaeHDhnAK",
+        "versionId": "711c72e3-0d2a-41bd-bcab-04a947729dae",
+        "event": "deactivated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-24T07:10:30.963Z",
+        "id": 4860,
+        "workflowId": "Havb102ZBST1xaeHDhnAK",
+        "versionId": "711c72e3-0d2a-41bd-bcab-04a947729dae",
+        "event": "deactivated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-24T07:10:30.985Z",
+        "id": 4861,
+        "workflowId": "Havb102ZBST1xaeHDhnAK",
+        "versionId": "711c72e3-0d2a-41bd-bcab-04a947729dae",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-24T07:16:23.470Z",
+        "id": 4877,
+        "workflowId": "Havb102ZBST1xaeHDhnAK",
+        "versionId": "711c72e3-0d2a-41bd-bcab-04a947729dae",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-24T06:30:24.986Z",
+        "id": 4808,
+        "workflowId": "Havb102ZBST1xaeHDhnAK",
+        "versionId": "711c72e3-0d2a-41bd-bcab-04a947729dae",
+        "event": "deactivated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-24T06:30:25.032Z",
+        "id": 4809,
+        "workflowId": "Havb102ZBST1xaeHDhnAK",
+        "versionId": "711c72e3-0d2a-41bd-bcab-04a947729dae",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-24T07:21:42.571Z",
+        "id": 4893,
+        "workflowId": "Havb102ZBST1xaeHDhnAK",
+        "versionId": "711c72e3-0d2a-41bd-bcab-04a947729dae",
+        "event": "deactivated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-24T07:21:42.594Z",
+        "id": 4894,
+        "workflowId": "Havb102ZBST1xaeHDhnAK",
+        "versionId": "711c72e3-0d2a-41bd-bcab-04a947729dae",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      }
+    ]
+  }
 }

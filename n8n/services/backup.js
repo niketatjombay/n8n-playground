@@ -5,7 +5,7 @@
  */
 
 const { loadEnv } = require('../lib/env-loader');
-const N8nClient = require('../lib/n8n-client');
+const { clientForEnv } = require('../lib/client-for-env');
 const { listWorkflowSlugs, getSubWorkflows, getWorkflowEnv } = require('../lib/metadata');
 const fs = require('fs');
 const path = require('path');
@@ -23,7 +23,7 @@ async function backup({ env, slug = null }) {
     throw new Error('env is required');
   }
 
-  const client = new N8nClient();
+  const client = clientForEnv(env);
   const steps = [];
 
   // --- Back up main workflows ---

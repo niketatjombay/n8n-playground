@@ -7,7 +7,16 @@
 const {
   listWorkflowSlugs, getWorkflow, getSubWorkflows, findTodoPlaceholders
 } = require('../lib/metadata');
-const { promotionOrder } = require('../config/environments.config');
+const { promotionOrder, environments, instances } = require('../config/environments.config');
+
+function getInstancesByEnv() {
+  const result = {};
+  for (const [env, config] of Object.entries(environments)) {
+    const instance = instances[config.instance];
+    result[env] = process.env[instance.baseUrlVar] || null;
+  }
+  return result;
+}
 
 /**
  * Get deployment status overview for all (or one) workflow(s).
@@ -97,7 +106,8 @@ function getStatus(slugFilter = null) {
     subWorkflows,
     workflows,
     todos,
-    environments: [...promotionOrder]
+    environments: [...promotionOrder],
+    instancesByEnv: getInstancesByEnv(),
   };
 }
 

@@ -29,9 +29,21 @@ const rawOverview = parsed.session_overview || parsed.session_narrative || {};
 const sessionOverview = {};
 sessionOverview.workshop_title = rawOverview.workshop_title || rawOverview.title || parsed.workshop_title || '';
 sessionOverview.key_themes = rawOverview.key_themes || rawOverview.themes || parsed.key_themes || [];
-sessionOverview.learning_objectives = rawOverview.learning_objectives || rawOverview.objectives || [];
+const rawObjectives = rawOverview.learning_objectives || rawOverview.objectives || [];
+sessionOverview.learning_objectives = rawObjectives.map(obj => {
+  if (typeof obj === 'string') return { objective: obj, bloom_level: 'Not specified' };
+  return { objective: obj.objective || obj.text || '', bloom_level: obj.bloom_level || obj.bloom || 'Not specified' };
+});
 sessionOverview.audience_summary = rawOverview.audience_summary || rawOverview.target_audience || '';
 sessionOverview.session_arc_narrative = rawOverview.session_arc_narrative || rawOverview.learning_architecture || rawOverview.day_1_flow || '';
+
+// application_moments — points where participants actively apply learning
+const rawMoments = rawOverview.application_moments || [];
+sessionOverview.application_moments = (Array.isArray(rawMoments) ? rawMoments : []).map(m => ({
+  slide: m.slide || m.slide_number || 0,
+  type: m.type || 'embedded',
+  description: m.description || m.desc || ''
+})).filter(m => m.slide > 0);
 
 // slide_blueprint — handle both object {slide_1:{}} and array [{slide_number:1}] formats
 let rawBlueprint = parsed.slide_blueprint || parsed.slides || parsed.slide_blueprints || {};
@@ -50,6 +62,14 @@ const slideBlueprint = {};
 for (let i = 1; i <= 17; i++) {
   const key = `slide_${i}`;
   const entry = rawBlueprint[key] || rawBlueprint[String(i)] || {};
+  // facilitation_design: tension vs. safety per slide
+  const rawFD = entry.facilitation_design || {};
+  const facilitationDesign = {
+    tension_level: rawFD.tension_level || rawFD.tension || 'Low',
+    rationale: rawFD.rationale || '',
+    signal: rawFD.signal || ''
+  };
+
   slideBlueprint[key] = {
     intent: entry.intent || entry.strategic_intent || entry.purpose || entry.design_intent || '',
     content_direction: entry.content_direction || entry.direction || entry.content || '',
@@ -57,6 +77,7 @@ for (let i = 1; i <= 17; i++) {
     experience_anchors: Array.isArray(entry.experience_anchors) ? entry.experience_anchors : [],
     kb_units_to_use: Array.isArray(entry.kb_units_to_use) ? entry.kb_units_to_use :
       (Array.isArray(entry.kb_units) ? entry.kb_units : []),
+    facilitation_design: facilitationDesign,
     flags: Array.isArray(entry.flags) ? entry.flags :
       (Array.isArray(entry.concerns) ? entry.concerns : [])
   };

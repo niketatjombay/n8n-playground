@@ -10,7 +10,7 @@
 const { loadEnv } = require('../lib/env-loader');
 loadEnv();
 
-const N8nClient = require('../lib/n8n-client');
+const { clientForEnv } = require('../lib/client-for-env');
 const { getWorkflowEnv, updateWorkflowEnv } = require('../lib/metadata');
 
 const ENV_ALIASES = { dev: 'development', stg: 'staging', prod: 'production' };
@@ -43,7 +43,7 @@ async function activate() {
     process.exit(1);
   }
 
-  const client = new N8nClient();
+  const client = clientForEnv(env);
   const action = deactivate ? 'deactivate' : 'activate';
 
   try {

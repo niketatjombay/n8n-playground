@@ -6,7 +6,7 @@
  */
 
 const { loadEnv } = require('../lib/env-loader');
-const N8nClient = require('../lib/n8n-client');
+const { clientForEnv } = require('../lib/client-for-env');
 const {
   listWorkflowSlugs, getSubWorkflows,
   getWorkflow, getWorkflowEnv,
@@ -63,7 +63,7 @@ async function deploy({ env, slug = null, dryRun = false }) {
     throw new Error('env is required');
   }
 
-  const client = new N8nClient();
+  const client = clientForEnv(env);
   const steps = [];
 
   // --- Deploy shared sub-workflows first ---

@@ -6,7 +6,7 @@
  */
 
 const { loadEnv } = require('../lib/env-loader');
-const N8nClient = require('../lib/n8n-client');
+const { clientForEnv } = require('../lib/client-for-env');
 const { remapWorkflow } = require('../lib/env-remap');
 const {
   getWorkflow, getWorkflowEnv, getSubWorkflows,
@@ -65,13 +65,23 @@ async function deployOne(client, workflow, existingId, envMeta = {}) {
     }
   }
 
-  // Create new — include projectId so it lands in the right project
+  // Create new — try with projectId first; fall back without if instance rejects it (400)
   const projectId = envMeta.project_id;
   if (projectId && !projectId.startsWith('TODO')) {
     payload.projectId = projectId;
   }
 
-  const created = await client.createWorkflow(payload);
+  let created;
+  try {
+    created = await client.createWorkflow(payload);
+  } catch (err) {
+    if (err.message.includes('400') && payload.projectId) {
+      delete payload.projectId;
+      created = await client.createWorkflow(payload);
+    } else {
+      throw err;
+    }
+  }
   const result = { id: created.id, action: 'created' };
 
   // Move into the correct folder within the project
@@ -143,7 +153,7 @@ async function promote({ slug, sourceEnv: srcArg, targetEnv: tgtArg, dryRun = fa
   }
 
   const steps = [];
-  const client = new N8nClient();
+  const client = clientForEnv(targetEnv);
 
   // --- Promote shared sub-workflows first ---
   const subSlugs = entry.uses_sub_workflows || [];

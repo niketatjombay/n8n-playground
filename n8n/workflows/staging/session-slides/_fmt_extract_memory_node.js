@@ -38,22 +38,8 @@ EXAMPLE OUTPUT:
   "real_world_situations": ["Team leads managing hybrid remote teams", "Recent org restructure causing role ambiguity"]
 }`;
 
-// Embed schema instructions in user prompt too (system_prompt may be ignored by some API configs)
 const schemaInstructions = `Extract session-design-relevant information from the project memory below.
-
-REQUIRED OUTPUT FORMAT — Return ONLY a JSON object with EXACTLY these 6 keys:
-1. "previous_sessions" — context from earlier sessions
-2. "established_frameworks" — models/frameworks already introduced
-3. "facilitator_preferences" — delivery style preferences
-4. "client_delivery_notes" — client-specific constraints
-5. "participant_pain_points" — challenges surfaced by participants
-6. "real_world_situations" — real-world scenarios as experience anchors
-
-RULES:
-- Each key maps to an array of short strings (max 15 words each, max 5 items per array)
-- Empty category → empty array []
-- ENTIRE response must be under 2000 characters
-- Return ONLY the JSON object — no markdown, no code fences, no commentary`;
+Return the JSON object with the 6 keys as specified in your instructions.`;
 
 const prompt = (!memory || memory.length < 50)
   ? 'No project memory available. Return empty arrays for all 6 keys:\n"previous_sessions", "established_frameworks", "facilitator_preferences", "client_delivery_notes", "participant_pain_points", "real_world_situations"'
@@ -62,7 +48,7 @@ const prompt = (!memory || memory.length < 50)
 return [{ json: {
   system_prompt: systemPrompt,
   prompt: prompt,
-  model: 'global.anthropic.claude-haiku-4-5-20251001-v1:0',
+  model: 'global.anthropic.claude-sonnet-4-6',
   node_name: 'ExtractMemory',
   memory_id: input.memory_id,
   knowledge_base_id: input.knowledge_base_id,

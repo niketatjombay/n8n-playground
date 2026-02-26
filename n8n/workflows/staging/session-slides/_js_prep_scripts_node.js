@@ -81,12 +81,17 @@ You receive: finalized slide content, strategic blueprint, QC reviewer flags, sl
 YOUR JOB: Write facilitator scripts and delivery notes for each assigned slide. A new facilitator reading your script without seeing the slides must be able to run the session.
 
 === FACILITATOR SCRIPT RULES ===
-- Near-verbatim, medium verbosity — facilitator reads and delivers
+- Near-verbatim — facilitator reads and delivers
 - STANDALONE — must work without slides visible
 - Include: opening statement, key talking points, transitions to next slide
 - Include: timing cues, engagement prompts, energy direction
 - Activity slides: exact step-by-step with timing, debrief questions, expected outcomes
 - Address any QC flags in your script (the reviewer flagged these for attention)
+
+=== SCRIPT LENGTH BY SLIDE TYPE ===
+- Title / Break / Closing slides: 150-200 words (brief, focused)
+- Content / Discussion / Quote slides: 250-350 words (detailed delivery)
+- Activity slides: 350-400 words (step-by-step instructions required)
 
 === MODALITY ADAPTATIONS ===
 For each slide, provide specific adaptations:
@@ -111,21 +116,61 @@ Return a JSON object with one key per slide:
   "slide_N": {
     "facilitator_script": "Near-verbatim delivery script (150-400 words). Include opening, talking points, transitions.",
     "visual_guidance": "What visual/diagram/image to show or draw (1-2 sentences)",
-    "energy_note": "Facilitator energy and tone direction (1 sentence)",
+    "energy_note": "REQUIRED. Facilitator energy and tone direction (1 sentence). Example: 'Start reflective and quiet, build energy through the reveal'",
     "modality_notes": {
       "virtual": "Specific virtual delivery adaptations (1-2 sentences)",
       "in_person": "Specific in-person delivery adaptations (1-2 sentences)"
     },
-    "debrief_questions": ["For discussion/activity slides only — 2-3 probing questions"],
-    "activity_run_of_show": "Step-by-step activity instructions with timing (only for activity slides, null otherwise)"
+    "debrief_questions": ["REQUIRED for discussion/activity/questions slides (types 11,12,14). 2-3 probing debrief questions. Empty array [] for other slides."],
+    "activity_run_of_show": "REQUIRED for activity slides (type 12). Step-by-step with timing: 'Step 1 (5 min): ... Step 2 (8 min): ...' Null for non-activity slides.",
+    "estimated_duration_minutes": "REQUIRED. Integer. Estimated facilitator delivery time for this slide.",
+    "optional_paths": [
+      { "trigger": "What participant behaviour triggers an alternate path",
+        "alternative": "What the facilitator should do instead" }
+    ]
   }
+}
+
+CRITICAL FIELD RULES:
+- energy_note MUST be a non-empty string for every slide (even "Neutral, conversational pace" is fine)
+- debrief_questions MUST be a non-empty array for slides of type Discussion/Reflection, Activity, Questions
+- activity_run_of_show MUST be a non-empty string with step-by-step timing for Activity slides
+- estimated_duration_minutes MUST be an integer for every slide
+- Do NOT embed debrief questions or activity run-of-show inside the facilitator_script text — put them in their dedicated fields
+
+IMPORTANT: Return FLAT JSON per slide. Do NOT nest fields inside facilitator_script — facilitator_script is a STRING (the verbal script), not an object. All fields (energy_note, debrief_questions, estimated_duration_minutes, etc.) go at the TOP LEVEL of each slide entry.
+
+EXAMPLE OUTPUT — Content slide (slide 9):
+"slide_9": {
+  "facilitator_script": "Let's talk about a tool that will change how you have every important conversation from this point forward. [PAUSE] How many of you have had a team member come to you with a problem, and your first instinct was to solve it for them? [SHOW OF HANDS] That instinct served you well as individual contributors. But as leaders, solving problems FOR your team actually makes them more dependent on you. The GROW model gives you a structured alternative. Four questions. That's it. Goal: What do you actually want to achieve here? Reality: Where are you right now? Options: What could you try? Will: What will you commit to doing? [POINT TO VISUAL] In your pre-reads, some of you flagged that structured models feel slow. Here's the truth: the first three conversations feel slow. By the fifth, it's faster than your old approach — because your team starts answering these questions before you ask them.",
+  "visual_guidance": "Point to GROW compass diagram as each quadrant is introduced",
+  "energy_note": "Start conversational and warm, build energy through the reveal of the four questions, then slow down for the 'truth' moment",
+  "estimated_duration_minutes": 5,
+  "modality_notes": { "virtual": "Use poll for show-of-hands question, share GROW visual via screen", "in_person": "Move to the front, use physical gestures for each GROW quadrant" },
+  "debrief_questions": [],
+  "activity_run_of_show": null,
+  "optional_paths": [{ "trigger": "Group is skeptical about structured models", "alternative": "Ask 'Who has tried coaching without a framework? What happened?' — let peer stories build the case" }]
+}
+
+EXAMPLE OUTPUT — Activity slide (slide 12):
+"slide_12": {
+  "facilitator_script": "This is where you move from concepts to application. You'll rotate through four stations, each one targeting a different leadership challenge your teams actually face. At each station, you'll find a scenario card and a coaching framework reference. Your job: craft a 3-minute coaching conversation using what we've covered. [PAUSE] I want you to actually say the words out loud — not just think about what you'd say. Your partner will play the team member. After each round, give each other one piece of specific feedback. Ready? Let's move to your first station.",
+  "visual_guidance": "Four station icons with rotation arrows and timer display",
+  "energy_note": "High energy, facilitative — keep groups moving and on-task. Use a visible timer.",
+  "estimated_duration_minutes": 35,
+  "modality_notes": { "virtual": "Use breakout rooms as stations with shared whiteboards", "in_person": "Set up 4 physical stations with flip charts and scenario cards" },
+  "debrief_questions": ["What patterns did you notice across the different scenarios?", "Which coaching question felt most unnatural — and why?", "What commitment feels most actionable for your team this week?"],
+  "activity_run_of_show": "0-2min: Instructions and station assignments | 2-10min: Station 1 | 10-18min: Station 2 | 18-26min: Station 3 | 26-34min: Station 4 | 34-35min: Return to seats",
+  "optional_paths": [{ "trigger": "One station finishes early", "alternative": "Give them a bonus challenge card with a harder scenario" }]
 }
 
 IMPORTANT:
 - Return one entry per assigned slide
 - facilitator_script is REQUIRED for every slide
-- debrief_questions: only for slides 11, 12, 14 (discussion/activity/questions types)
-- activity_run_of_show: only for slide 12 (activity type)
+- energy_note is REQUIRED for every slide — never leave empty
+- estimated_duration_minutes is REQUIRED for every slide — integer value
+- debrief_questions: REQUIRED non-empty array for slides 11, 12, 14 (discussion/activity/questions types)
+- activity_run_of_show: REQUIRED for slide 12 (activity type) with step-by-step timing
 - Do NOT repeat on-slide content — the script is what the facilitator SAYS, not what's on the slide`;
 
 return [{ json: {
