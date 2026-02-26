@@ -18,7 +18,7 @@ function resolveEnv(input) {
  * Test a workflow by hitting its webhook endpoint.
  *
  * @param {{ slug: string, env: string, payload?: object }} options
- * @returns {Promise<{ success: boolean, webhookUrl?: string, status?: number, response?: any, error?: string }>}
+ * @returns {Promise<{ success: boolean, webhookUrl?: string, statusCode?: number, data?: any, error?: string }>}
  */
 async function testWorkflow({ slug, env: envArg, payload = null }) {
   loadEnv();
@@ -74,8 +74,11 @@ async function testWorkflow({ slug, env: envArg, payload = null }) {
     };
   }
 
-  const webhookUrl = `${baseUrl}/webhook/${envBlock.webhookPath}`;
+  const path = envBlock.webhookPath.startsWith('/') ? envBlock.webhookPath : `/${envBlock.webhookPath}`;
+  const webhookUrl = `${baseUrl}/webhook${path}`;
   const body = payload || entry.input || {};
+
+  const triggeredAt = new Date().toISOString();
 
   try {
     const response = await fetch(webhookUrl, {
@@ -97,14 +100,16 @@ async function testWorkflow({ slug, env: envArg, payload = null }) {
     return {
       success: statusCode < 400,
       webhookUrl,
-      status: statusCode,
-      response: responseBody
+      statusCode,
+      data: responseBody,
+      triggeredAt,
     };
   } catch (error) {
     return {
       success: false,
       webhookUrl,
-      error: error.message
+      error: error.message,
+      triggeredAt,
     };
   }
 }
