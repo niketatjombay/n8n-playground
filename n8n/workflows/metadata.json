@@ -78,7 +78,7 @@
               "workflows": [
                 {
                   "n8nId": "utFKJbzCl6GrA7en",
-                  "name": "pre-work-summary",
+                  "name": "[PROD] Pre-Work Summary",
                   "slug": "pre-work-summary",
                   "type": "main",
                   "webhookPath": "/pre-work-summary",
@@ -399,7 +399,7 @@
               "workflows": [
                 {
                   "n8nId": "RI1h4abSVfI7N6kG",
-                  "name": "session-slides",
+                  "name": "[PROD] Session Slides",
                   "slug": "session-slides",
                   "type": "main",
                   "webhookPath": "/session-slides",
@@ -554,7 +554,7 @@
               "workflows": [
                 {
                   "n8nId": "g011GkLODOjGe5qm",
-                  "name": "case-study-creator",
+                  "name": "[PROD] Case Study Creator",
                   "slug": "case-study-creator",
                   "type": "main",
                   "webhookPath": "/case-study-creator",
@@ -649,7 +649,7 @@
               "workflows": [
                 {
                   "n8nId": "slT9cjHoFs06m9e1",
-                  "name": "document-summary-extractor",
+                  "name": "[PROD] [Staging] Document Summary Extractor (Without Long Term Memory)",
                   "slug": "document-summary-extractor",
                   "type": "main",
                   "webhookPath": "/document-summary-extractor",
@@ -724,7 +724,7 @@
               "workflows": [
                 {
                   "n8nId": "Iryma4b8pY0SFXkC",
-                  "name": "project-memory-updater",
+                  "name": "[PROD] Project Memory Updater",
                   "slug": "project-memory-updater",
                   "type": "main",
                   "webhookPath": "/project-memory-updater",
@@ -840,7 +840,7 @@
               "workflows": [
                 {
                   "n8nId": "D6fFCdu4vBDxklaE",
-                  "name": "llm-sub-workflow",
+                  "name": "[PROD] LLM Sub-workflow",
                   "slug": "llm-sub-workflow",
                   "type": "sub",
                   "webhookPath": null,
@@ -942,7 +942,7 @@
               "workflows": [
                 {
                   "n8nId": "KA0PQtx4oJHoDoTo",
-                  "name": "drive-utils",
+                  "name": "[PROD] Google Drive Utils (Sub-Workflow)",
                   "slug": "drive-utils",
                   "type": "sub",
                   "webhookPath": null,
