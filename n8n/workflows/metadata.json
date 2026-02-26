@@ -649,7 +649,7 @@
               "workflows": [
                 {
                   "n8nId": "slT9cjHoFs06m9e1",
-                  "name": "[PROD] [Staging] Document Summary Extractor (Without Long Term Memory)",
+                  "name": "[PROD] Document Summary Extractor (Without Long Term Memory)",
                   "slug": "document-summary-extractor",
                   "type": "main",
                   "webhookPath": "/document-summary-extractor",
