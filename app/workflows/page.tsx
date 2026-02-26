@@ -26,6 +26,7 @@ interface WorkflowsData {
   project_id: string;
   project_name: string;
   folders: FolderNode[];
+  instancesByEnv: Record<string, string | null>;
 }
 
 const ENV_COLORS: Record<string, string> = {
@@ -52,7 +53,7 @@ function WorkflowRow({ wf }: { wf: WorkflowEntry }) {
   );
 }
 
-function FolderTree({ folder, depth = 0 }: { folder: FolderNode; depth?: number }) {
+function FolderTree({ folder, depth = 0, instancesByEnv = {} }: { folder: FolderNode; depth?: number; instancesByEnv?: Record<string, string | null> }) {
   const [expanded, setExpanded] = useState(depth < 2);
   const hasChildren = folder.folders.length > 0 || folder.workflows.length > 0;
   const envClass = folder.environment ? ENV_COLORS[folder.environment] ?? null : null;
@@ -76,6 +77,11 @@ function FolderTree({ folder, depth = 0 }: { folder: FolderNode; depth?: number 
             {folder.environment}
           </span>
         )}
+        {folder.environment && instancesByEnv[folder.environment] && (
+          <span className="text-xs text-zinc-600 font-mono truncate">
+            {new URL(instancesByEnv[folder.environment]!).host}
+          </span>
+        )}
         {activeWorkflows.length > 0 && (
           <span className="text-xs text-zinc-600 ml-auto">
             {activeWorkflows.length} workflow{activeWorkflows.length !== 1 ? 's' : ''}
@@ -93,7 +99,7 @@ function FolderTree({ folder, depth = 0 }: { folder: FolderNode; depth?: number 
             </div>
           )}
           {folder.folders.map(child => (
-            <FolderTree key={child.folder_id ?? child.folder_name} folder={child} depth={depth + 1} />
+            <FolderTree key={child.folder_id ?? child.folder_name} folder={child} depth={depth + 1} instancesByEnv={instancesByEnv} />
           ))}
         </div>
       )}
@@ -183,7 +189,12 @@ export default function WorkflowsPage() {
       {!loading && !error && data && (
         <div className="mt-6">
           {data.folders.map(folder => (
-            <FolderTree key={folder.folder_id ?? folder.folder_name} folder={folder} depth={0} />
+            <FolderTree
+              key={folder.folder_id ?? folder.folder_name}
+              folder={folder}
+              depth={0}
+              instancesByEnv={data.instancesByEnv}
+            />
           ))}
         </div>
       )}
