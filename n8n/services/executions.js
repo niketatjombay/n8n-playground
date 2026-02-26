@@ -1,5 +1,6 @@
 const { loadEnv } = require('../lib/env-loader');
 const N8nClient = require('../lib/n8n-client');
+const { clientForEnv } = require('../lib/client-for-env');
 const { getWorkflowEnv } = require('../lib/metadata');
 
 const ENV_ALIASES = { dev: 'development', stg: 'staging', prod: 'production' };
@@ -26,7 +27,7 @@ async function getExecutions({ slug, env: envArg, limit = 20 }) {
   }
 
   try {
-    const client = new N8nClient();
+    const client = clientForEnv(env);
     const result = await client.getExecutions(n8nId, limit);
     const executions = (result.data || []).map((exec) => ({
       id: exec.id,
@@ -420,7 +421,7 @@ function aggregateTokenSummary(nodes) {
  * Fetch full execution detail including per-node breakdown and token usage.
  * Recursively fetches sub-workflow executions.
  */
-async function getExecutionDetail({ executionId }) {
+async function getExecutionDetail({ executionId, env }) {
   loadEnv();
 
   if (!executionId) {
@@ -428,7 +429,7 @@ async function getExecutionDetail({ executionId }) {
   }
 
   try {
-    const client = new N8nClient();
+    const client = env ? clientForEnv(env) : new N8nClient();
     const raw = await client.getExecution(executionId);
 
     const runData = raw.data?.resultData?.runData;
