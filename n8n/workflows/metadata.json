@@ -71,11 +71,27 @@
               ]
             },
             {
-              "folder_id": "TODO_PROD_FOLDER_ID",
+              "folder_id": "KFGT2bzbDxqr0EVv",
               "folder_name": "production",
               "environment": "production",
               "folders": [],
-              "workflows": []
+              "workflows": [
+                {
+                  "n8nId": "utFKJbzCl6GrA7en",
+                  "name": "pre-work-summary",
+                  "slug": "pre-work-summary",
+                  "type": "main",
+                  "webhookPath": null,
+                  "active": false,
+                  "lastDeployedAt": "2026-02-26T04:51:48.121Z",
+                  "archived": false,
+                  "description": "Pre-work summary creator",
+                  "uses_sub_workflows": [
+                    "llm-sub-workflow",
+                    "drive-utils"
+                  ]
+                }
+              ]
             }
           ],
           "workflows": []
@@ -376,11 +392,27 @@
               ]
             },
             {
-              "folder_id": "TODO_PROD_FOLDER_ID",
+              "folder_id": "jsqMCrJc7HVWluaL",
               "folder_name": "production",
               "environment": "production",
               "folders": [],
-              "workflows": []
+              "workflows": [
+                {
+                  "n8nId": "RI1h4abSVfI7N6kG",
+                  "name": "session-slides",
+                  "slug": "session-slides",
+                  "type": "main",
+                  "webhookPath": null,
+                  "active": false,
+                  "lastDeployedAt": "2026-02-26T04:51:48.779Z",
+                  "archived": false,
+                  "description": "Session slides creator",
+                  "uses_sub_workflows": [
+                    "llm-sub-workflow",
+                    "drive-utils"
+                  ]
+                }
+              ]
             }
           ],
           "workflows": []
@@ -420,27 +452,27 @@
                       "items": [
                         {
                           "name": "Strategic Thinking",
-                          "definition": "TODO"
+                          "definition": null
                         },
                         {
                           "name": "Decision Making",
-                          "definition": "TODO"
+                          "definition": null
                         },
                         {
                           "name": "Stakeholder Management",
-                          "definition": "TODO"
+                          "definition": null
                         },
                         {
                           "name": "Problem Solving",
-                          "definition": "TODO"
+                          "definition": null
                         },
                         {
                           "name": "Team Leadership",
-                          "definition": "TODO"
+                          "definition": null
                         },
                         {
                           "name": "Change Management",
-                          "definition": "TODO"
+                          "definition": null
                         }
                       ]
                     },
@@ -482,27 +514,27 @@
                       "items": [
                         {
                           "name": "Strategic Thinking",
-                          "definition": "TODO"
+                          "definition": null
                         },
                         {
                           "name": "Decision Making",
-                          "definition": "TODO"
+                          "definition": null
                         },
                         {
                           "name": "Stakeholder Management",
-                          "definition": "TODO"
+                          "definition": null
                         },
                         {
                           "name": "Problem Solving",
-                          "definition": "TODO"
+                          "definition": null
                         },
                         {
                           "name": "Team Leadership",
-                          "definition": "TODO"
+                          "definition": null
                         },
                         {
                           "name": "Change Management",
-                          "definition": "TODO"
+                          "definition": null
                         }
                       ]
                     },
@@ -515,11 +547,27 @@
               ]
             },
             {
-              "folder_id": "TODO_PROD_FOLDER_ID",
+              "folder_id": "RatBUwE0G8nbgnwa",
               "folder_name": "production",
               "environment": "production",
               "folders": [],
-              "workflows": []
+              "workflows": [
+                {
+                  "n8nId": "g011GkLODOjGe5qm",
+                  "name": "case-study-creator",
+                  "slug": "case-study-creator",
+                  "type": "main",
+                  "webhookPath": null,
+                  "active": false,
+                  "lastDeployedAt": "2026-02-26T04:51:41.160Z",
+                  "archived": false,
+                  "description": "Main case study creator workflow — 9 LLM stages that generate a complete case study with questions, assessor guidance, quality scoring, and bias checking.",
+                  "uses_sub_workflows": [
+                    "llm-sub-workflow",
+                    "drive-utils"
+                  ]
+                }
+              ]
             }
           ],
           "workflows": []
@@ -572,7 +620,7 @@
                   "name": "[Staging] Document Summary Extractor (Without Long Term Memory)",
                   "slug": "document-summary-extractor",
                   "type": "main",
-                  "webhookPath": "TODO",
+                  "webhookPath": null,
                   "active": false,
                   "lastDeployedAt": "2026-02-24T07:21:42.707Z",
                   "archived": false,
@@ -594,11 +642,27 @@
               ]
             },
             {
-              "folder_id": "TODO_PROD_FOLDER_ID",
+              "folder_id": "4JLkQmhzFV2M76tX",
               "folder_name": "production",
               "environment": "production",
               "folders": [],
-              "workflows": []
+              "workflows": [
+                {
+                  "n8nId": "slT9cjHoFs06m9e1",
+                  "name": "document-summary-extractor",
+                  "slug": "document-summary-extractor",
+                  "type": "main",
+                  "webhookPath": null,
+                  "active": false,
+                  "lastDeployedAt": "2026-02-26T05:13:13.028Z",
+                  "archived": false,
+                  "description": "Document Summary Extractor — processes project_info, meeting_notes, and project_document file types. Extracts text from Google Drive documents via drive-utils sub-workflow, summarizes content via LLM sub-workflow, and updates coreapi.",
+                  "uses_sub_workflows": [
+                    "llm-sub-workflow",
+                    "drive-utils"
+                  ]
+                }
+              ]
             }
           ],
           "workflows": []
@@ -653,11 +717,26 @@
               ]
             },
             {
-              "folder_id": "TODO_PROD_FOLDER_ID",
+              "folder_id": "4JLkQmhzFV2M76tX",
               "folder_name": "production",
               "environment": "production",
               "folders": [],
-              "workflows": []
+              "workflows": [
+                {
+                  "n8nId": "Iryma4b8pY0SFXkC",
+                  "name": "project-memory-updater",
+                  "slug": "project-memory-updater",
+                  "type": "main",
+                  "webhookPath": null,
+                  "active": false,
+                  "lastDeployedAt": "2026-02-26T05:13:13.300Z",
+                  "archived": false,
+                  "description": "Project Memory Consolidator — 3-mode workflow (2A: Initial Build, 2B: Document Merge, 2C: Corrections Only) that maintains evolving project memory with conflict detection and clarification questions via LLM sub-workflow.",
+                  "uses_sub_workflows": [
+                    "llm-sub-workflow"
+                  ]
+                }
+              ]
             }
           ],
           "workflows": []
@@ -754,11 +833,28 @@
               ]
             },
             {
-              "folder_id": "TODO_PROD_FOLDER_ID",
+              "folder_id": "4JLkQmhzFV2M76tX",
               "folder_name": "production",
               "environment": "production",
               "folders": [],
-              "workflows": []
+              "workflows": [
+                {
+                  "n8nId": "D6fFCdu4vBDxklaE",
+                  "name": "llm-sub-workflow",
+                  "slug": "llm-sub-workflow",
+                  "type": "sub",
+                  "webhookPath": null,
+                  "active": false,
+                  "lastDeployedAt": null,
+                  "archived": false,
+                  "description": "Generic LLM utility — calls agentcoreapi (AWS Bedrock), parses JSON response with robust error handling. No workflow-specific logic.",
+                  "used_by": [
+                    "case-study-creator",
+                    "project-memory-updater",
+                    "document-summary-extractor"
+                  ]
+                }
+              ]
             }
           ],
           "workflows": []
@@ -839,11 +935,27 @@
               ]
             },
             {
-              "folder_id": "TODO_PROD_FOLDER_ID",
+              "folder_id": "4JLkQmhzFV2M76tX",
               "folder_name": "production",
               "environment": "production",
               "folders": [],
-              "workflows": []
+              "workflows": [
+                {
+                  "n8nId": "KA0PQtx4oJHoDoTo",
+                  "name": "drive-utils",
+                  "slug": "drive-utils",
+                  "type": "sub",
+                  "webhookPath": null,
+                  "active": false,
+                  "lastDeployedAt": null,
+                  "archived": false,
+                  "description": "Google Drive document extraction — fetches document content from a Google Drive URL and returns the extracted text.",
+                  "used_by": [
+                    "case-study-creator",
+                    "document-summary-extractor"
+                  ]
+                }
+              ]
             }
           ],
           "workflows": []
