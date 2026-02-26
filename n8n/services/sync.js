@@ -1,8 +1,12 @@
 /**
- * Sync service — reconciles metadata.json workflow status with live n8n API.
+ * Sync service — reconciles metadata.json workflow status with live n8n APIs.
+ *
+ * Two n8n instances are synced separately:
+ *   dev_staging → development + staging workflows via N8N_BASE_URL
+ *   production  → production workflows via N8N_PRODUCTION_BASE_URL
  *
  * What sync does:
- *   - Fetches all workflows for the project from n8n API
+ *   - Fetches all workflows for each project from its n8n instance
  *   - For each workflow in metadata: updates name and active from live data
  *   - Marks archived: true for workflows whose n8nId is no longer found in n8n
  *
@@ -15,10 +19,8 @@
  */
 
 const { loadEnv } = require('../lib/env-loader');
-const N8nClient = require('../lib/n8n-client');
+const { clientForEnv } = require('../lib/client-for-env');
 const { readMetadata, writeMetadata } = require('../lib/metadata');
-
-const PROJECT_ID = 'JIV2elLHsVFXybZ2';
 
 /**
  * Build a lookup: n8nId -> live workflow data from the n8n API.
@@ -33,15 +35,34 @@ function buildLiveLookup(workflows) {
 
 /**
  * Walk all folders in the metadata tree and call visitor for each workflow entry.
- * @param {Array} folders - metadata folders array
- * @param {Function} visitor - called with (workflow, folder) for each workflow found
+ * Resolves the environment from folder ancestry so we know which instance to check.
  */
-function walkWorkflows(folders, visitor) {
+function walkWorkflows(folders, visitor, parentEnv = null) {
   for (const folder of (folders || [])) {
+    const env = folder.environment || parentEnv;
     for (const wf of (folder.workflows || [])) {
-      visitor(wf, folder);
+      visitor(wf, env);
     }
-    walkWorkflows(folder.folders, visitor);
+    walkWorkflows(folder.folders, visitor, env);
+  }
+}
+
+/**
+ * Fetch all workflows for a project from a given n8n instance.
+ * Returns a live lookup or null if the project ID is not yet configured.
+ */
+async function fetchLiveLookup(env, projectId, errors) {
+  if (!projectId) {
+    errors.push(`${env}: project_id not configured — skipping sync for this instance`);
+    return null;
+  }
+  try {
+    const client = clientForEnv(env);
+    const result = await client.getWorkflowsByProject(projectId);
+    return buildLiveLookup(result.data || []);
+  } catch (err) {
+    errors.push(`${env}: failed to fetch workflows — ${err.message}`);
+    return null;
   }
 }
 
@@ -51,48 +72,38 @@ function walkWorkflows(folders, visitor) {
  */
 async function sync() {
   loadEnv();
-  const client = new N8nClient();
-  const errors = [];
 
-  // Fetch all workflows for the project
-  let allWorkflows;
-  try {
-    const result = await client.getWorkflowsByProject(PROJECT_ID);
-    allWorkflows = result.data || [];
-  } catch (err) {
-    throw new Error(`Failed to fetch workflows from n8n: ${err.message}`);
-  }
-
-  const liveLookup = buildLiveLookup(allWorkflows);
-
-  // Load metadata
   const meta = readMetadata();
-
-  // Guard: requires new hierarchical format
   if (!meta.folders) {
     return { updated: 0, archived: 0, errors: ['metadata.json is in flat format — run migration first'] };
   }
 
+  const errors = [];
+
+  // Fetch live lookups per instance
+  const devStagingLookup = await fetchLiveLookup('development', meta.project_id, errors);
+  const productionLookup = await fetchLiveLookup('production', meta.project_id, errors);
+
   let updated = 0;
   let archived = 0;
 
-  walkWorkflows(meta.folders, (wf) => {
+  const reconcile = (wf, env) => {
     if (!wf.n8nId) return;
-
+    const liveLookup = env === 'production' ? productionLookup : devStagingLookup;
+    if (!liveLookup) return;
     const live = liveLookup[wf.n8nId];
-
     if (live) {
       wf.name = live.name;
       wf.active = live.active;
       wf.archived = false;
       updated++;
-    } else {
-      if (!wf.archived) {
-        wf.archived = true;
-        archived++;
-      }
+    } else if (!wf.archived) {
+      wf.archived = true;
+      archived++;
     }
-  });
+  };
+
+  walkWorkflows(meta.folders, reconcile);
 
   writeMetadata(meta);
 
