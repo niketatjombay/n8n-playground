@@ -1,1 +1,11 @@
-{}
+{
+  "project_id": "test_project_v2_001",
+  "client_id": "test_client_v2_001",
+  "meeting_note_id": "test_meeting_001",
+  "file_type": "meeting_notes",
+  "document_summary": "Meeting with Acme Corp HR team on Jan 15, 2026. Present: Rajesh Kumar (CHRO), Priya Sharma (L&D Head), Niket from Jombay. Acme is a 5000-employee manufacturing company in Pune. They want a leadership development program for 40 mid-level managers across 3 plants. Budget is 25 lakhs. Timeline: start by March 2026, complete by June. Key challenge: managers promoted from technical roles lack people management skills. Rajesh said 'we're losing good engineers because their managers can't have difficult conversations'. Priya wants 360-degree assessments as part of the program. Decision: pilot with 15 managers from Pune plant first. Success metric: 20% improvement in team engagement scores within 6 months.",
+  "current_project_memory": null,
+  "ai_observations": null,
+  "clarification_answers": null,
+  "freeform_corrections": null
+}

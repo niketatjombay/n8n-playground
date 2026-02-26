@@ -1,7 +1,6 @@
 {
-  "id": "o2dzZ5PxRIZfzNA0",
-  "name": "[DEV] Project Memory Updater",
-  "active": true,
+  "name": "[DEV] Project Memory Updater v2",
+  "description": null,
   "nodes": [
     {
       "parameters": {
@@ -21,7 +20,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Input Validation & Mode Detection\nconst body = $('1.1_TRG_Webhook').first().json.body;\n\nif (!body) {\n  return [{ json: {\n    validation_passed: false,\n    error_message: 'No request body received'\n  }}];\n}\n\n// Detect what inputs are present\nconst hasNewExtraction = !!(body.document_summary && body.document_summary.trim().length > 0);\nconst hasCurrentMemory = !!(body.current_project_memory && body.current_project_memory.trim().length > 0);\n\n// Determine processing mode\nlet mode, modeDescription;\nif (!hasCurrentMemory) {\n  mode = '2A_INITIAL';\n  modeDescription = 'First extraction - building initial memory';\n} else if (hasNewExtraction) {\n  mode = '2B_DOCUMENT_MERGE';\n  modeDescription = 'Merging new document with existing memory';\n} else {\n  mode = '2C_CORRECTIONS';\n  modeDescription = 'Processing user corrections only';\n}\n\n// Validate mode-specific requirements\nif (mode === '2A_INITIAL' && !hasNewExtraction) {\n  return [{ json: {\n    validation_passed: false,\n    error_message: 'Mode 2A requires document_summary for initial build'\n  }}];\n}\n\nif (mode === '2C_CORRECTIONS') {\n  const hasAnswers = body.clarification_answers && body.clarification_answers.length > 0;\n  const hasCorrections = body.freeform_corrections && body.freeform_corrections.trim().length > 0;\n  if (!hasAnswers && !hasCorrections) {\n    return [{ json: {\n      validation_passed: false,\n      error_message: 'Mode 2C requires either clarification_answers or freeform_corrections'\n    }}];\n  }\n}\n\n// Build input_data matching the spec schema\nconst input_data = {};\n\nif (hasNewExtraction) {\n  input_data.new_extraction = {\n    filename: body.file_type || 'unknown',\n    document_summary: body.document_summary,\n    ai_observations: body.ai_observations || null\n  };\n} else {\n  input_data.new_extraction = null;\n}\n\ninput_data.current_project_memory_text = hasCurrentMemory ? body.current_project_memory : null;\ninput_data.clarification_answers = body.clarification_answers || null;\ninput_data.freeform_corrections = body.freeform_corrections || null;\n\nreturn [{ json: {\n  validation_passed: true,\n  mode: mode,\n  mode_description: modeDescription,\n  input_data: input_data,\n  project_id: body.project_id,\n  client_id: body.client_id,\n  meeting_note_id: body.meeting_note_id\n}}];"
+        "jsCode": "// Input Validation & Mode Detection (v2 — simplified)\nconst body = $('1.1_TRG_Webhook').first().json.body;\n\nif (!body) {\n  return [{ json: {\n    validation_passed: false,\n    error_message: 'No request body received'\n  }}];\n}\n\n// Detect inputs\nconst hasDocSummary = !!(body.document_summary && body.document_summary.trim().length > 0);\nconst hasMemory = !!(body.current_project_memory && body.current_project_memory.trim().length > 0);\n\n// Determine mode\nlet mode, modeDescription;\nif (!hasMemory) {\n  mode = '2A_INITIAL';\n  modeDescription = 'First document — building initial memory';\n} else if (hasDocSummary) {\n  mode = '2B_DOCUMENT_MERGE';\n  modeDescription = 'Merging new document into existing memory';\n} else {\n  mode = '2C_CORRECTIONS';\n  modeDescription = 'Applying user corrections to existing memory';\n}\n\n// Validate mode-specific requirements\nif (mode === '2A_INITIAL' && !hasDocSummary) {\n  return [{ json: {\n    validation_passed: false,\n    error_message: 'Mode 2A requires document_summary for initial build'\n  }}];\n}\n\nif (mode === '2C_CORRECTIONS') {\n  const hasAnswers = body.clarification_answers && (typeof body.clarification_answers === 'string' ? body.clarification_answers.trim().length > 2 : Array.isArray(body.clarification_answers) && body.clarification_answers.length > 0);\n  const hasCorrections = body.freeform_corrections && body.freeform_corrections.trim().length > 0;\n  if (!hasAnswers && !hasCorrections) {\n    return [{ json: {\n      validation_passed: false,\n      error_message: 'Mode 2C requires either clarification_answers or freeform_corrections'\n    }}];\n  }\n}\n\nreturn [{ json: {\n  validation_passed: true,\n  mode: mode,\n  mode_description: modeDescription,\n  document_summary: hasDocSummary ? body.document_summary : null,\n  file_type: body.file_type || 'unknown',\n  ai_observations: body.ai_observations || null,\n  current_project_memory: hasMemory ? body.current_project_memory : null,\n  clarification_answers: body.clarification_answers || null,\n  freeform_corrections: body.freeform_corrections || null,\n  project_id: body.project_id,\n  client_id: body.client_id,\n  meeting_note_id: body.meeting_note_id\n}}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -67,49 +66,16 @@
     },
     {
       "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 3
-          },
-          "conditions": [
-            {
-              "id": "need-step1-gate",
-              "leftValue": "={{ $json.mode }}",
-              "rightValue": "2C_CORRECTIONS",
-              "operator": {
-                "type": "string",
-                "operation": "notEquals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.3,
-      "position": [
-        -1500,
-        -900
-      ],
-      "id": "b1c2d3e4-need-step1-gate",
-      "name": "1.4_IF_NeedStep1"
-    },
-    {
-      "parameters": {
-        "jsCode": "// Step 1: Format extraction prompt\nconst validated = $('1.2_VAL_Input').first().json;\nconst inputData = validated.input_data;\n\nconst systemPrompt = \"# INFORMATION EXTRACTION AGENT\\n\\nYou are an AI agent that extracts and categorizes ALL information from a meeting document for a consulting project at Jombay (HR tech, L&D sector).\\n\\n## YOUR TASK\\n\\nRead the document_summary carefully and extract EVERY piece of factual information, organizing it into relevant categories.\\n\\n## EXTRACTION RULES\\n\\nDO:\\n- Extract ALL factual information — names, dates, numbers, decisions, observations\\n- Preserve exact stakeholder language and terminology\\n- Note who said what (attribute statements to speakers)\\n- Include context and nuances — don't simplify\\n- Capture both explicit statements and implicit information\\n- Note any AI observations if provided\\n\\nDON'T:\\n- Interpret, enhance, or correct information\\n- Add assumptions or speculative details\\n- Filter or prioritize — extract EVERYTHING\\n- Modify stakeholder statements\\n\\n## OUTPUT FORMAT\\n\\nReturn ONLY valid JSON:\\n\\n{\\n  \\\"client_name\\\": \\\"string or null — company/client name if mentioned\\\",\\n  \\\"sections\\\": {\\n    \\\"project_overview\\\": \\\"string or null — what is being delivered, project description\\\",\\n    \\\"business_problem\\\": \\\"string or null — core challenge, why project exists\\\",\\n    \\\"client_context\\\": \\\"string or null — background about client, industry, size\\\",\\n    \\\"target_audience\\\": \\\"string or null — who is impacted, characteristics, needs\\\",\\n    \\\"stakeholder_expectations\\\": \\\"string or null — what stakeholders want, attributed to people\\\",\\n    \\\"success_criteria\\\": \\\"string or null — how success measured, metrics, KPIs\\\",\\n    \\\"constraints_realities\\\": \\\"string or null — limitations, ground realities\\\",\\n    \\\"key_decisions\\\": \\\"string or null — concrete decisions, who decided, when\\\",\\n    \\\"open_questions\\\": \\\"string or null — unresolved points raised in document\\\",\\n    \\\"behavioral_observations\\\": \\\"string or null — patterns, dynamics, culture notes\\\",\\n    \\\"potential_risks\\\": \\\"string or null — risks identified or implied\\\",\\n    \\\"timeline_milestones\\\": \\\"string or null — dates, phases, deadlines\\\",\\n    \\\"budget_resources\\\": \\\"string or null — budget, resource allocation\\\"\\n  },\\n  \\\"metadata\\\": {\\n    \\\"speakers_identified\\\": [\\\"list of speaker names found\\\"],\\n    \\\"key_dates\\\": [\\\"list of dates/deadlines mentioned\\\"],\\n    \\\"action_items\\\": [\\\"list of action items or next steps\\\"],\\n    \\\"document_type_detected\\\": \\\"string — meeting notes / proposal / brief / etc\\\"\\n  }\\n}\\n\\nRequirements:\\n- Use null for sections with no relevant content — don't create empty strings\\n- Each section value should be a descriptive string with full detail\\n- Preserve markdown-style formatting within strings (use \\\\n for line breaks)\";\n\nconst userInput = {\n  document_summary: inputData.new_extraction.document_summary,\n  filename: inputData.new_extraction.filename,\n  ai_observations: inputData.new_extraction.ai_observations\n};\n\nconst fullPrompt = systemPrompt + '\\n\\n# INPUT\\n\\n' + JSON.stringify(userInput, null, 2);\n\nreturn [{ json: {\n  prompt: fullPrompt,\n  model: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',\n  max_tokens: 3000,\n  node_name: 'PMU_STEP1_EXTRACT',\n  workflow_session_id: validated.meeting_note_id || '',\n  workflow_id: 'project-memory-updater',\n  project_id: validated.project_id || '',\n  client_id: validated.client_id || ''\n}}];"
+        "jsCode": "// Step 1: Format unified merge prompt (handles all modes: 2A, 2B, 2C)\nconst validated = $('1.2_VAL_Input').first().json;\n\nconst systemPrompt = `# PROJECT MEMORY MAINTENANCE AGENT\n\nYou maintain a living \"Project Memory\" document for consulting projects\nat Jombay (HR tech, L&D sector). This document is the single source of\ntruth consumed by downstream AI workflows.\n\n## YOUR TASK\n\nYou will receive:\n- The CURRENT project memory (markdown text, or null if first document)\n- A NEW document summary to integrate (or null if corrections-only)\n- Optional: user corrections or clarification answers to apply\n\nProduce an UPDATED project memory by merging new information into\nthe existing memory.\n\n## MERGE RULES\n\n### What to ADD:\n- Facts not already present in memory: names, numbers, dates, decisions\n- Attributed statements: who said what, with context\n- Specific observations, constraints, risks mentioned\n- Action items, next steps, deadlines\n\n### What to SKIP:\n- Facts already captured in existing memory (even if worded differently)\n- Generic/obvious statements (\"leadership development is important\")\n- Restatements of information already in another section\n- AI-generated interpretations or implications not stated in inputs\n\n### How to MERGE:\n- When new info adds detail to an existing bullet, UPDATE that bullet\n  in-place rather than adding a new one\n- When new info introduces a genuinely new topic, add it to the\n  appropriate section (or create a new section)\n- When new info contradicts existing memory, mark with\n  [CONFLICT — see changes_made.conflicts_detected] and preserve both\n\n## PROPER NOUN RULES\n- NEVER modify company names, people names, or locations\n- Preserve exactly as stated in input, even if seemingly misspelled\n- One organization = one entity. Use the full formal name everywhere.\n  Track aliases in the metadata.\n\n## SPEAKER vs PARTICIPANT\n- People who SPOKE in meetings are not necessarily program participants\n- Only list someone as target audience if explicitly described as such\n\n## MEMORY STRUCTURE\n\nUse ONLY sections with actual content. Do not create empty sections.\n\nRecommended sections (adapt as needed):\n- **Project Overview** — What is being delivered\n- **Client Context** — Company background — ONLY from inputs\n- **Business Problem** — Core challenge, why project exists\n- **Target Audience** — Who is impacted, characteristics, needs\n- **Stakeholder Expectations** — Attributed to specific people\n- **Success Criteria** — Metrics, KPIs\n- **Constraints & Realities** — Limitations, ground realities\n- **Key Decisions** — What was decided, by whom, when\n- **Open Questions** — Unresolved points\n- **Observations & Risks** — Behavioral patterns, risks\n- **Timeline & Milestones** — Dates, phases, deadlines\n- **People Directory** — Name, role (speaker/subject/both), designation\n\nFormatting:\n- Include ALL specific facts (names, numbers, dates, quotes, decisions)\n- Cut generic statements and obvious implications\n- No fact should appear in more than one section\n- Prefer bullet lists over prose. Length scales with actual content.\n- Use markdown: headers (##), bullet lists, **bold** for emphasis\n\n## OUTPUT FORMAT\n\nReturn ONLY valid JSON:\n\n{\n  \"project_memory_text\": \"# Project Memory\\n\\n## Section...\\n...\",\n  \"changes_made\": {\n    \"sections_updated\": [\"section names modified or created\"],\n    \"new_facts_added\": [\"brief list of genuinely new facts\"],\n    \"duplicates_skipped\": [\"facts already in memory, not re-added\"],\n    \"conflicts_detected\": [\n      {\n        \"section\": \"section\",\n        \"existing\": \"current value\",\n        \"new\": \"contradicting value\"\n      }\n    ],\n    \"questions_resolved\": [\n      { \"question\": \"...\", \"resolution\": \"...\" }\n    ],\n    \"summary\": \"1-2 sentence summary of what changed\"\n  }\n}\n\nRequirements:\n- project_memory_text is the COMPLETE updated memory (not a diff)\n- changes_made.duplicates_skipped — ACTIVELY track what you did not add\n- Use \\\\n for line breaks in markdown text`;\n\n// Build mode-specific input\nconst mergeInput = {\n  mode: validated.mode,\n  mode_description: validated.mode_description,\n  current_project_memory_text: validated.current_project_memory,\n  document_summary: validated.document_summary,\n  file_type: validated.file_type,\n  ai_observations: validated.ai_observations,\n  clarification_answers: validated.clarification_answers,\n  freeform_corrections: validated.freeform_corrections\n};\n\nconst fullPrompt = systemPrompt + '\\n\\n# INPUT\\n\\n' + JSON.stringify(mergeInput, null, 2);\n\nreturn [{ json: {\n  prompt: fullPrompt,\n  model: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',\n  max_tokens: 8000,\n  node_name: 'PMU_V2_STEP1_MERGE',\n  workflow_session_id: validated.meeting_note_id || '',\n  workflow_id: 'project-memory-updater',\n  project_id: validated.project_id || '',\n  client_id: validated.client_id || ''\n}}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         -1200,
-        -800
+        -900
       ],
-      "id": "e5f6a7b8-fmt-extract",
-      "name": "2.1_FMT_Extract"
+      "id": "a1b2c3d4-fmt-merge-v2",
+      "name": "2.1_FMT_Merge"
     },
     {
       "parameters": {
@@ -124,58 +90,10 @@
       "typeVersion": 1.1,
       "position": [
         -900,
-        -800
-      ],
-      "id": "c9d0e1f2-sub-extract",
-      "name": "2.2_SUB_Extract",
-      "onError": "continueErrorOutput",
-      "retryOnFail": true,
-      "maxTries": 2,
-      "waitBetweenTries": 5000
-    },
-    {
-      "parameters": {
-        "jsCode": "// Step 2 (Doc path): Parse extraction + format merge prompt\nconst extractResult = $input.first().json;\nconst validated = $('1.2_VAL_Input').first().json;\nconst inputData = validated.input_data;\n\n// Parse extraction result\nlet extraction = extractResult.llm_response;\nif (typeof extraction === 'string') {\n  try { extraction = JSON.parse(extraction); } catch (e) {\n    return [{ json: { _error: 'Failed to parse Step 1 extraction: ' + e.message }}];\n  }\n}\n\nconst systemPrompt = \"# MEMORY MERGE AGENT\\n\\nYou are an AI agent that maintains \\\"Project Memory\\\" for consulting projects at Jombay (HR tech, L&D sector). Your job is to merge new information into an existing project memory document.\\n\\n## CORE PRINCIPLES\\n\\n1. **Merge factual information AS STATED** — preserve exact stakeholder language\\n2. **Preserve context and nuances** — don't lose important details\\n3. **Identify conflicts and flag them** — don't resolve conflicts yourself\\n4. **Check if new info answers previous questions** — resolve them silently\\n5. **Maintain clean, readable structure**\\n\\n## MEMORY STRUCTURE GUIDELINES\\n\\nUse these sections as needed. Adapt based on actual content:\\n\\n1. **Project Overview** — Factual description, what is being delivered\\n2. **Client Context** — Background about client, industry, size (use AI knowledge if client recognized)\\n3. **Business Problem** — Core challenge, current state issues, why project exists\\n4. **Target Audience Description** — Who is impacted/involved, characteristics, needs\\n5. **Stakeholder Expectations** — What stakeholders want, attributed to specific people\\n6. **Success Criteria** — How success will be measured, metrics, KPIs\\n7. **Constraints & Realities** — Limitations, ground realities, resource constraints\\n8. **Key Decisions Taken** — Concrete decisions, who decided, when, rationale\\n9. **Open Questions** — Questions raised by client/stakeholders, unresolved points\\n10. **Behavioral Observations** — Patterns, dynamics, culture notes\\n11. **Potential Risks** — Risks identified or implied\\n\\nSection rules:\\n- Only include sections with actual content\\n- Add new sections if needed (e.g., \\\"Technical Requirements\\\", \\\"Budget Breakdown\\\")\\n- Maintain chronological flow within sections\\n- Use markdown formatting: headers, lists, emphasis\\n- Attribute statements to speakers when known\\n\\n## CONFLICT DETECTION\\n\\nWhen new information contradicts existing memory:\\n1. DO NOT choose a version yourself\\n2. FLAG it in the memory with: \\\"[CONFLICT — See changes_made.conflicts_detected]\\\"\\n3. Record both versions in conflicts_detected\\n\\n## NATURAL QUESTION RESOLUTION\\n\\nWhen new information answers previous clarification questions or open questions:\\n1. Update memory silently with the answer\\n2. Record which questions were resolved in changes_made\\n3. Don't mention the question was answered — just update memory naturally\\n\\n## OUTPUT FORMAT\\n\\nReturn ONLY valid JSON:\\n\\n{\\n  \\\"project_memory_text\\\": \\\"# Project Memory\\\\n\\\\n## Section...\\\\n...\\\",\\n  \\\"changes_made\\\": {\\n    \\\"sections_updated\\\": [\\\"list of section names that were modified or created\\\"],\\n    \\\"conflicts_detected\\\": [\\n      {\\n        \\\"section\\\": \\\"section name\\\",\\n        \\\"existing_value\\\": \\\"what memory currently says\\\",\\n        \\\"new_value\\\": \\\"what new information says\\\",\\n        \\\"description\\\": \\\"brief description of the conflict\\\"\\n      }\\n    ],\\n    \\\"questions_resolved\\\": [\\n      {\\n        \\\"question_summary\\\": \\\"brief description of the question that was answered\\\",\\n        \\\"resolution\\\": \\\"how it was resolved\\\"\\n      }\\n    ],\\n    \\\"summary\\\": \\\"1-2 sentence summary of what changed\\\"\\n  }\\n}\\n\\nRequirements:\\n- project_memory_text is a complete markdown string (not a diff — full updated memory)\\n- changes_made.sections_updated lists ALL sections that were touched\\n- conflicts_detected can be empty array if no conflicts\\n- questions_resolved can be empty array if no questions were answered\\n- Use \\\\n for line breaks in markdown text\";\n\n// Build merge input based on mode\nlet mergeInput;\nif (validated.mode === '2A_INITIAL') {\n  mergeInput = {\n    mode: '2A_INITIAL',\n    mode_description: 'Building initial project memory from first document',\n    extracted_information: extraction,\n    current_project_memory_text: null,\n    client_name: extraction.client_name || null\n  };\n} else {\n  // 2B — merge with existing\n  mergeInput = {\n    mode: '2B_DOCUMENT_MERGE',\n    mode_description: 'Merging new document extraction into existing memory',\n    extracted_information: extraction,\n    current_project_memory_text: inputData.current_project_memory_text,\n    client_name: extraction.client_name || null\n  };\n}\n\nconst fullPrompt = systemPrompt + '\\n\\n# INPUT\\n\\n' + JSON.stringify(mergeInput, null, 2);\n\nreturn [{ json: {\n  prompt: fullPrompt,\n  model: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',\n  max_tokens: 8000,\n  node_name: 'PMU_STEP2_MERGE_DOC',\n  workflow_session_id: validated.meeting_note_id || '',\n  workflow_id: 'project-memory-updater',\n  project_id: validated.project_id || '',\n  client_id: validated.client_id || ''\n}}];"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -600,
-        -800
-      ],
-      "id": "a1b2c3d4-fmt-merge-doc",
-      "name": "2.3_FMT_MergeDoc"
-    },
-    {
-      "parameters": {
-        "jsCode": "// Step 2 (Corrections path): Format merge prompt for 2C\nconst validated = $('1.2_VAL_Input').first().json;\nconst inputData = validated.input_data;\n\nconst systemPrompt = \"# MEMORY MERGE AGENT\\n\\nYou are an AI agent that maintains \\\"Project Memory\\\" for consulting projects at Jombay (HR tech, L&D sector). Your job is to merge new information into an existing project memory document.\\n\\n## CORE PRINCIPLES\\n\\n1. **Merge factual information AS STATED** — preserve exact stakeholder language\\n2. **Preserve context and nuances** — don't lose important details\\n3. **Identify conflicts and flag them** — don't resolve conflicts yourself\\n4. **Check if new info answers previous questions** — resolve them silently\\n5. **Maintain clean, readable structure**\\n\\n## MEMORY STRUCTURE GUIDELINES\\n\\nUse these sections as needed. Adapt based on actual content:\\n\\n1. **Project Overview** — Factual description, what is being delivered\\n2. **Client Context** — Background about client, industry, size (use AI knowledge if client recognized)\\n3. **Business Problem** — Core challenge, current state issues, why project exists\\n4. **Target Audience Description** — Who is impacted/involved, characteristics, needs\\n5. **Stakeholder Expectations** — What stakeholders want, attributed to specific people\\n6. **Success Criteria** — How success will be measured, metrics, KPIs\\n7. **Constraints & Realities** — Limitations, ground realities, resource constraints\\n8. **Key Decisions Taken** — Concrete decisions, who decided, when, rationale\\n9. **Open Questions** — Questions raised by client/stakeholders, unresolved points\\n10. **Behavioral Observations** — Patterns, dynamics, culture notes\\n11. **Potential Risks** — Risks identified or implied\\n\\nSection rules:\\n- Only include sections with actual content\\n- Add new sections if needed (e.g., \\\"Technical Requirements\\\", \\\"Budget Breakdown\\\")\\n- Maintain chronological flow within sections\\n- Use markdown formatting: headers, lists, emphasis\\n- Attribute statements to speakers when known\\n\\n## CONFLICT DETECTION\\n\\nWhen new information contradicts existing memory:\\n1. DO NOT choose a version yourself\\n2. FLAG it in the memory with: \\\"[CONFLICT — See changes_made.conflicts_detected]\\\"\\n3. Record both versions in conflicts_detected\\n\\n## NATURAL QUESTION RESOLUTION\\n\\nWhen new information answers previous clarification questions or open questions:\\n1. Update memory silently with the answer\\n2. Record which questions were resolved in changes_made\\n3. Don't mention the question was answered — just update memory naturally\\n\\n## OUTPUT FORMAT\\n\\nReturn ONLY valid JSON:\\n\\n{\\n  \\\"project_memory_text\\\": \\\"# Project Memory\\\\n\\\\n## Section...\\\\n...\\\",\\n  \\\"changes_made\\\": {\\n    \\\"sections_updated\\\": [\\\"list of section names that were modified or created\\\"],\\n    \\\"conflicts_detected\\\": [\\n      {\\n        \\\"section\\\": \\\"section name\\\",\\n        \\\"existing_value\\\": \\\"what memory currently says\\\",\\n        \\\"new_value\\\": \\\"what new information says\\\",\\n        \\\"description\\\": \\\"brief description of the conflict\\\"\\n      }\\n    ],\\n    \\\"questions_resolved\\\": [\\n      {\\n        \\\"question_summary\\\": \\\"brief description of the question that was answered\\\",\\n        \\\"resolution\\\": \\\"how it was resolved\\\"\\n      }\\n    ],\\n    \\\"summary\\\": \\\"1-2 sentence summary of what changed\\\"\\n  }\\n}\\n\\nRequirements:\\n- project_memory_text is a complete markdown string (not a diff — full updated memory)\\n- changes_made.sections_updated lists ALL sections that were touched\\n- conflicts_detected can be empty array if no conflicts\\n- questions_resolved can be empty array if no questions were answered\\n- Use \\\\n for line breaks in markdown text\";\n\nconst mergeInput = {\n  mode: '2C_CORRECTIONS',\n  mode_description: 'Applying user corrections and clarification answers to existing memory',\n  extracted_information: null,\n  current_project_memory_text: inputData.current_project_memory_text,\n  clarification_answers: inputData.clarification_answers,\n  freeform_corrections: inputData.freeform_corrections\n};\n\nconst fullPrompt = systemPrompt + '\\n\\n# INPUT\\n\\n' + JSON.stringify(mergeInput, null, 2);\n\nreturn [{ json: {\n  prompt: fullPrompt,\n  model: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',\n  max_tokens: 8000,\n  node_name: 'PMU_STEP2_MERGE_CORR',\n  workflow_session_id: validated.meeting_note_id || '',\n  workflow_id: 'project-memory-updater',\n  project_id: validated.project_id || '',\n  client_id: validated.client_id || ''\n}}];"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -600,
-        -1100
-      ],
-      "id": "e5f6a7b8-fmt-merge-corr",
-      "name": "2.4_FMT_MergeCorr"
-    },
-    {
-      "parameters": {
-        "workflowId": {
-          "__rl": true,
-          "mode": "id",
-          "value": "1DR7SBmbHnVajdbxTl5Vu"
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.1,
-      "position": [
-        -300,
         -900
       ],
       "id": "d4e5f6a7-sub-merge",
-      "name": "3.1_SUB_Merge",
+      "name": "2.2_SUB_Merge",
       "onError": "continueErrorOutput",
       "retryOnFail": true,
       "maxTries": 2,
@@ -183,7 +101,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Step 3: Parse merge output + format questions prompt + carry forward memory & changes\nconst mergeResult = $input.first().json;\nconst validated = $('1.2_VAL_Input').first().json;\n\n// Parse merge result\nlet mergeData = mergeResult.llm_response;\nif (typeof mergeData === 'string') {\n  try { mergeData = JSON.parse(mergeData); } catch (e) {\n    return [{ json: { _error: 'Failed to parse Step 2 merge output: ' + e.message }}];\n  }\n}\n\nif (!mergeData || !mergeData.project_memory_text) {\n  return [{ json: { _error: 'Step 2 output missing project_memory_text' }}];\n}\n\nconst systemPrompt = \"# QUESTION GENERATION AGENT\\n\\nYou are an AI agent that analyzes project memory and generates clarification questions for consulting projects at Jombay (HR tech, L&D sector).\\n\\n## YOUR TASK\\n\\nAnalyze the updated project memory and generate a MAXIMUM of 3 critical clarification questions. Focus only on the most important gaps, conflicts, or ambiguities.\\n\\n## QUESTION PRIORITIES\\n\\n- HIGH: Blocks progress, affects deliverables/timeline/budget, involves money/resources\\n- MEDIUM: Important but doesn't block immediate work, affects scope/approach/quality\\n- LOW: Nice-to-have clarity, doesn't impact immediate work\\n\\n## QUESTION CATEGORIES\\n\\n- CONFLICT: Contradictory information from different sources\\n- GAP: Missing critical information needed to proceed\\n- AMBIGUITY: Unclear or vague statement needing specificity\\n- VERIFICATION: Confirm assumption or interpretation\\n\\n## RULES\\n\\n- Generate MAX 3 questions (fewer is better if memory is clear)\\n- Focus on what would be MOST useful for the consultant\\n- Don't ask about information that's already clear in the memory\\n- Each question must be specific and actionable\\n- Provide AI recommendations with reasoning\\n\\n## OUTPUT FORMAT\\n\\nReturn ONLY valid JSON:\\n\\n{\\n  \\\"clarification_questions\\\": [\\n    {\\n      \\\"id\\\": \\\"CQ-001\\\",\\n      \\\"priority\\\": \\\"HIGH | MEDIUM | LOW\\\",\\n      \\\"category\\\": \\\"CONFLICT | GAP | AMBIGUITY | VERIFICATION\\\",\\n      \\\"question\\\": \\\"Specific, actionable question\\\",\\n      \\\"what_we_currently_have\\\": \\\"Current state showing the issue\\\",\\n      \\\"what_answer_should_look_like\\\": \\\"Example of good answer\\\",\\n      \\\"ai_recommendation\\\": {\\n        \\\"suggestion\\\": \\\"Recommended answer/action\\\",\\n        \\\"reasoning\\\": \\\"Why this recommendation makes sense\\\",\\n        \\\"confidence\\\": \\\"HIGH | MEDIUM | LOW — with brief explanation\\\"\\n      }\\n    }\\n  ]\\n}\\n\\nRequirements:\\n- clarification_questions is an array (can be empty [] if memory is complete and clear)\\n- Maximum 3 questions\\n- All fields in each question object are required\\n- Auto-generate sequential IDs: CQ-001, CQ-002, CQ-003\\n- Be specific about what information is needed\";\n\nconst questionInput = {\n  project_memory_text: mergeData.project_memory_text,\n  changes_made: mergeData.changes_made || null,\n  mode: validated.mode,\n  mode_description: validated.mode_description\n};\n\nconst fullPrompt = systemPrompt + '\\n\\n# INPUT\\n\\n' + JSON.stringify(questionInput, null, 2);\n\nreturn [{ json: {\n  prompt: fullPrompt,\n  model: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',\n  max_tokens: 2000,\n  node_name: 'PMU_STEP3_QUESTIONS',\n  workflow_session_id: validated.meeting_note_id || '',\n  workflow_id: 'project-memory-updater',\n  project_id: validated.project_id || '',\n  client_id: validated.client_id || '',\n  // Carry forward Step 2 outputs for JS_Package\n  _step2_memory: mergeData.project_memory_text,\n  _step2_changes: mergeData.changes_made || null\n}}];"
+        "jsCode": "// Step 2: Parse merge output + format quality review prompt\nconst mergeResult = $input.first().json;\nconst validated = $('1.2_VAL_Input').first().json;\n\n// Parse merge result\nlet mergeData = mergeResult.llm_response;\nif (typeof mergeData === 'string') {\n  try { mergeData = JSON.parse(mergeData); } catch (e) {\n    return [{ json: { _error: 'Failed to parse Step 1 merge output: ' + e.message }}];\n  }\n}\n\nif (!mergeData || !mergeData.project_memory_text) {\n  return [{ json: { _error: 'Step 1 output missing project_memory_text' }}];\n}\n\nconst systemPrompt = `# MEMORY QUALITY REVIEWER\n\nYou are a quality reviewer for Project Memory documents at Jombay\n(HR tech, L&D sector). Your job is to review a freshly-merged memory\nfor quality issues and generate clarification questions.\n\n## YOUR TASK\n\nYou will receive:\n- The UPDATED project memory (just merged by another agent)\n- The CHANGELOG from the merge (what was added, skipped, conflicted)\n\nDo two things:\n1. REVIEW the memory for quality issues and fix them\n2. GENERATE up to 3 clarification questions (if needed)\n\n## REVIEW CHECKLIST\n\nCheck and fix each of these:\n\n1. **Duplication**: Is any fact stated in more than one section?\n   → Remove the duplicate, keep the most contextually appropriate one\n2. **Hallucination risk**: Does any statement seem to contain general\n   knowledge rather than input-sourced facts?\n   → Flag with [VERIFY] or remove if clearly hallucinated\n3. **Attribution**: Are stakeholder statements properly attributed?\n   → Ensure \"who said what\" is clear\n4. **Organization coherence**: Is the client referred to by one\n   consistent name throughout?\n   → Standardize to full formal name\n5. **Empty sections**: Are there sections with no real content?\n   → Remove them\n6. **Fluff**: Are there generic/obvious statements?\n   → Remove them\n\n## QUESTION GENERATION\n\nGenerate MAX 3 clarification questions. Fewer is better.\nOnly ask about genuinely important gaps or conflicts.\n\nPriorities:\n- HIGH: Blocks progress, affects deliverables/timeline/budget\n- MEDIUM: Important but doesn't block immediate work\n- LOW: Nice-to-have clarity\n\nCategories:\n- CONFLICT: Contradictory information\n- GAP: Missing critical information\n- AMBIGUITY: Unclear statement needing specificity\n- VERIFICATION: Confirm an assumption\n\nRules:\n- Don't ask about information already clear in memory\n- Each question must be specific and actionable\n- Provide AI recommendations with reasoning\n- If the merge was for corrections mode (user answering previous\n  questions), be very conservative — only ask if truly critical\n\n## OUTPUT FORMAT\n\nReturn ONLY valid JSON:\n\n{\n  \"project_memory_text\": \"# Project Memory\\n\\n...\",\n  \"quality_fixes_applied\": [\n    {\n      \"type\": \"duplication | hallucination | attribution | fluff | empty_section\",\n      \"description\": \"what was fixed\",\n      \"section\": \"affected section\"\n    }\n  ],\n  \"clarification_questions\": [\n    {\n      \"id\": \"CQ-001\",\n      \"priority\": \"HIGH | MEDIUM | LOW\",\n      \"category\": \"CONFLICT | GAP | AMBIGUITY | VERIFICATION\",\n      \"question\": \"Specific question\",\n      \"context\": \"What we currently know about this\",\n      \"ideal_answer\": \"Example of a good answer\",\n      \"ai_recommendation\": {\n        \"suggestion\": \"Recommended answer\",\n        \"reasoning\": \"Why\",\n        \"confidence\": \"HIGH | MEDIUM | LOW\"\n      }\n    }\n  ]\n}`;\n\nconst reviewInput = {\n  project_memory_text: mergeData.project_memory_text,\n  changes_made: mergeData.changes_made || null,\n  mode: validated.mode,\n  mode_description: validated.mode_description\n};\n\nconst fullPrompt = systemPrompt + '\\n\\n# INPUT\\n\\n' + JSON.stringify(reviewInput, null, 2);\n\nreturn [{ json: {\n  prompt: fullPrompt,\n  model: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',\n  max_tokens: 8000,\n  node_name: 'PMU_V2_STEP2_REVIEW',\n  workflow_session_id: validated.meeting_note_id || '',\n  workflow_id: 'project-memory-updater',\n  project_id: validated.project_id || '',\n  client_id: validated.client_id || '',\n  _step1_memory: mergeData.project_memory_text,\n  _step1_changes: mergeData.changes_made || null\n}}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -191,8 +109,8 @@
         0,
         -900
       ],
-      "id": "b8c9d0e1-fmt-questions",
-      "name": "3.2_FMT_Questions"
+      "id": "b8c9d0e1-fmt-review-v2",
+      "name": "3.1_FMT_Review"
     },
     {
       "parameters": {
@@ -209,8 +127,8 @@
         300,
         -900
       ],
-      "id": "f2a3b4c5-sub-questions",
-      "name": "3.3_SUB_Questions",
+      "id": "f2a3b4c5-sub-review",
+      "name": "3.2_SUB_Review",
       "onError": "continueErrorOutput",
       "retryOnFail": true,
       "maxTries": 2,
@@ -218,7 +136,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Package final output: combine Step 2 memory + Step 3 questions\nconst questionsResult = $input.first().json;\nconst validated = $('1.2_VAL_Input').first().json;\nconst fmtQuestionsData = $('3.2_FMT_Questions').first().json;\n\n// Get carried-forward Step 2 data\nconst step2Memory = fmtQuestionsData._step2_memory;\nconst step2Changes = fmtQuestionsData._step2_changes;\n\nif (!step2Memory) {\n  return [{ json: {\n    memory_status: 'error',\n    error_message: 'Step 2 memory not available in package step',\n    project_id: validated.project_id,\n    client_id: validated.client_id,\n    meeting_note_id: validated.meeting_note_id\n  }}];\n}\n\n// Parse questions result\nlet questionsData = questionsResult.llm_response;\nif (typeof questionsData === 'string') {\n  try { questionsData = JSON.parse(questionsData); } catch (e) {\n    // Non-fatal: proceed with empty questions\n    questionsData = { clarification_questions: [] };\n  }\n}\n\nconst questions = Array.isArray(questionsData.clarification_questions)\n  ? questionsData.clarification_questions\n  : [];\n\n// Determine status\nlet memory_status = 'updated';\nif (questions.length > 0) {\n  memory_status = 'clarification_needed';\n}\n\nreturn [{ json: {\n  memory_status: memory_status,\n  current_project_memory: step2Memory,\n  clarification_questions: questions,\n  metadata: {\n    changes_made: step2Changes,\n    mode: validated.mode,\n    mode_description: validated.mode_description\n  },\n  project_id: validated.project_id,\n  client_id: validated.client_id,\n  meeting_note_id: validated.meeting_note_id\n}}];"
+        "jsCode": "// Package final output: Step 2 review output → API response\nconst reviewResult = $input.first().json;\nconst validated = $('1.2_VAL_Input').first().json;\nconst fmtReviewData = $('3.1_FMT_Review').first().json;\n\n// Parse review result\nlet reviewData = reviewResult.llm_response;\nif (typeof reviewData === 'string') {\n  try { reviewData = JSON.parse(reviewData); } catch (e) {\n    reviewData = null;\n  }\n}\n\n// Use review output if available, otherwise fall back to Step 1 merge\nlet finalMemory, questions, qualityFixes;\n\nif (reviewData && reviewData.project_memory_text) {\n  finalMemory = reviewData.project_memory_text;\n  questions = Array.isArray(reviewData.clarification_questions)\n    ? reviewData.clarification_questions : [];\n  qualityFixes = reviewData.quality_fixes_applied || [];\n} else {\n  finalMemory = fmtReviewData._step1_memory;\n  questions = [];\n  qualityFixes = [];\n}\n\nif (!finalMemory) {\n  return [{ json: {\n    memory_status: 'error',\n    error_message: 'No memory output from either merge or review step',\n    project_id: validated.project_id,\n    client_id: validated.client_id,\n    meeting_note_id: validated.meeting_note_id\n  }}];\n}\n\nconst memory_status = questions.length > 0 ? 'clarification_needed' : 'updated';\n\nreturn [{ json: {\n  memory_status: memory_status,\n  current_project_memory: finalMemory,\n  clarification_questions: questions,\n  metadata: {\n    changes_made: fmtReviewData._step1_changes,\n    quality_fixes: qualityFixes,\n    mode: validated.mode,\n    mode_description: validated.mode_description\n  },\n  project_id: validated.project_id,\n  client_id: validated.client_id,\n  meeting_note_id: validated.meeting_note_id\n}}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -377,7 +295,7 @@
       "main": [
         [
           {
-            "node": "1.4_IF_NeedStep1",
+            "node": "2.1_FMT_Merge",
             "type": "main",
             "index": 0
           }
@@ -391,40 +309,22 @@
         ]
       ]
     },
-    "1.4_IF_NeedStep1": {
+    "2.1_FMT_Merge": {
       "main": [
         [
           {
-            "node": "2.1_FMT_Extract",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "2.4_FMT_MergeCorr",
+            "node": "2.2_SUB_Merge",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "2.1_FMT_Extract": {
+    "2.2_SUB_Merge": {
       "main": [
         [
           {
-            "node": "2.2_SUB_Extract",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "2.2_SUB_Extract": {
-      "main": [
-        [
-          {
-            "node": "2.3_FMT_MergeDoc",
+            "node": "3.1_FMT_Review",
             "type": "main",
             "index": 0
           }
@@ -438,58 +338,18 @@
         ]
       ]
     },
-    "2.3_FMT_MergeDoc": {
+    "3.1_FMT_Review": {
       "main": [
         [
           {
-            "node": "3.1_SUB_Merge",
+            "node": "3.2_SUB_Review",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "2.4_FMT_MergeCorr": {
-      "main": [
-        [
-          {
-            "node": "3.1_SUB_Merge",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "3.1_SUB_Merge": {
-      "main": [
-        [
-          {
-            "node": "3.2_FMT_Questions",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "5.1_ERR_Format",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "3.2_FMT_Questions": {
-      "main": [
-        [
-          {
-            "node": "3.3_SUB_Questions",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "3.3_SUB_Questions": {
+    "3.2_SUB_Review": {
       "main": [
         [
           {
@@ -557,6 +417,648 @@
     "executionTimeout": 600
   },
   "staticData": null,
+  "meta": null,
   "pinData": {},
-  "tags": []
+  "versionId": "bd59fbd3-3d02-49bc-8d5f-f028bbcc4b26",
+  "activeVersionId": "bd59fbd3-3d02-49bc-8d5f-f028bbcc4b26",
+  "versionCounter": 174,
+  "triggerCount": 1,
+  "activeVersion": {
+    "updatedAt": "2026-02-24T06:22:22.608Z",
+    "createdAt": "2026-02-24T06:22:22.608Z",
+    "versionId": "bd59fbd3-3d02-49bc-8d5f-f028bbcc4b26",
+    "workflowId": "uX4p9Kt3Ztz59NEO",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "6d067559-e8da-4451-9f99-1a54840140be",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          -2400,
+          -900
+        ],
+        "id": "a8659f6d-8fb1-4e86-9daf-e41eefcb9abf",
+        "name": "1.1_TRG_Webhook",
+        "webhookId": "55fa4152-e304-4417-94e2-6d1bd13c9ac5"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Input Validation & Mode Detection\nconst body = $('1.1_TRG_Webhook').first().json.body;\n\nif (!body) {\n  return [{ json: {\n    validation_passed: false,\n    error_message: 'No request body received'\n  }}];\n}\n\n// Detect what inputs are present\nconst hasNewExtraction = !!(body.document_summary && body.document_summary.trim().length > 0);\nconst hasCurrentMemory = !!(body.current_project_memory && body.current_project_memory.trim().length > 0);\n\n// Determine processing mode\nlet mode, modeDescription;\nif (!hasCurrentMemory) {\n  mode = '2A_INITIAL';\n  modeDescription = 'First extraction - building initial memory';\n} else if (hasNewExtraction) {\n  mode = '2B_DOCUMENT_MERGE';\n  modeDescription = 'Merging new document with existing memory';\n} else {\n  mode = '2C_CORRECTIONS';\n  modeDescription = 'Processing user corrections only';\n}\n\n// Validate mode-specific requirements\nif (mode === '2A_INITIAL' && !hasNewExtraction) {\n  return [{ json: {\n    validation_passed: false,\n    error_message: 'Mode 2A requires document_summary for initial build'\n  }}];\n}\n\nif (mode === '2C_CORRECTIONS') {\n  const hasAnswers = body.clarification_answers && body.clarification_answers.length > 0;\n  const hasCorrections = body.freeform_corrections && body.freeform_corrections.trim().length > 0;\n  if (!hasAnswers && !hasCorrections) {\n    return [{ json: {\n      validation_passed: false,\n      error_message: 'Mode 2C requires either clarification_answers or freeform_corrections'\n    }}];\n  }\n}\n\n// Build input_data matching the spec schema\nconst input_data = {};\n\nif (hasNewExtraction) {\n  input_data.new_extraction = {\n    filename: body.file_type || 'unknown',\n    document_summary: body.document_summary,\n    ai_observations: body.ai_observations || null\n  };\n} else {\n  input_data.new_extraction = null;\n}\n\ninput_data.current_project_memory_text = hasCurrentMemory ? body.current_project_memory : null;\ninput_data.clarification_answers = body.clarification_answers || null;\ninput_data.freeform_corrections = body.freeform_corrections || null;\n\nreturn [{ json: {\n  validation_passed: true,\n  mode: mode,\n  mode_description: modeDescription,\n  input_data: input_data,\n  project_id: body.project_id,\n  client_id: body.client_id,\n  meeting_note_id: body.meeting_note_id\n}}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -2100,
+          -900
+        ],
+        "id": "d05601e4-2f9a-4b46-a36f-f6c1849e4ff6",
+        "name": "1.2_VAL_Input"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "val-gate-1",
+                "leftValue": "={{ $json.validation_passed }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          -1800,
+          -900
+        ],
+        "id": "f4b8071e-3901-4a83-9d78-50fa53098aea",
+        "name": "1.3_IF_Valid"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "need-step1-gate",
+                "leftValue": "={{ $json.mode }}",
+                "rightValue": "2C_CORRECTIONS",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEquals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          -1500,
+          -900
+        ],
+        "id": "b1c2d3e4-need-step1-gate",
+        "name": "1.4_IF_NeedStep1"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Step 1: Format extraction prompt\nconst validated = $('1.2_VAL_Input').first().json;\nconst inputData = validated.input_data;\n\nconst systemPrompt = \"# INFORMATION EXTRACTION AGENT\\n\\nYou are an AI agent that extracts and categorizes ALL information from a meeting document for a consulting project at Jombay (HR tech, L&D sector).\\n\\n## YOUR TASK\\n\\nRead the document_summary carefully and extract EVERY piece of factual information, organizing it into relevant categories.\\n\\n## EXTRACTION RULES\\n\\nDO:\\n- Extract ALL factual information — names, dates, numbers, decisions, observations\\n- Preserve exact stakeholder language and terminology\\n- Note who said what (attribute statements to speakers)\\n- Include context and nuances — don't simplify\\n- Capture both explicit statements and implicit information\\n- Note any AI observations if provided\\n- Distinguish between SPEAKERS (people present in the meeting giving input) and SUBJECTS (people being discussed but not present). Track this in metadata.people_identified.role\\n\\nDON'T:\\n- Interpret, enhance, or correct information\\n- Add assumptions or speculative details\\n- Filter or prioritize — extract EVERYTHING\\n- Modify stakeholder statements\\n- NEVER modify, correct, or reinterpret proper nouns (company names, people names, locations) — preserve them EXACTLY as they appear in the input, even if they seem misspelled or unfamiliar\\n- Split a single organization into multiple entities — if the same company is referred to by different names or abbreviations, treat them as aliases of ONE organization\\n\\n## OUTPUT FORMAT\\n\\nReturn ONLY valid JSON:\\n\\n{\\n  \\\"client_name\\\": \\\"string or null — company/client name if mentioned\\\",\\n  \\\"sections\\\": {\\n    \\\"project_overview\\\": \\\"string or null — what is being delivered, project description\\\",\\n    \\\"business_problem\\\": \\\"string or null — core challenge, why project exists\\\",\\n    \\\"client_context\\\": \\\"string or null — background about client, industry, size\\\",\\n    \\\"target_audience\\\": \\\"string or null — who is impacted, characteristics, needs\\\",\\n    \\\"stakeholder_expectations\\\": \\\"string or null — what stakeholders want, attributed to people\\\",\\n    \\\"success_criteria\\\": \\\"string or null — how success measured, metrics, KPIs\\\",\\n    \\\"constraints_realities\\\": \\\"string or null — limitations, ground realities\\\",\\n    \\\"key_decisions\\\": \\\"string or null — concrete decisions, who decided, when\\\",\\n    \\\"open_questions\\\": \\\"string or null — unresolved points raised in document\\\",\\n    \\\"behavioral_observations\\\": \\\"string or null — patterns, dynamics, culture notes\\\",\\n    \\\"potential_risks\\\": \\\"string or null — risks identified or implied\\\",\\n    \\\"timeline_milestones\\\": \\\"string or null — dates, phases, deadlines\\\",\\n    \\\"budget_resources\\\": \\\"string or null — budget, resource allocation\\\"\\n  },\\n  \\\"metadata\\\": {\\n    \\\"people_identified\\\": [\\n      { \\\"name\\\": \\\"exact name as stated\\\", \\\"role\\\": \\\"speaker | subject | both\\\", \\\"designation\\\": \\\"title if mentioned, else null\\\" }\\n    ],\\n    \\\"organization_name\\\": \\\"primary organization name exactly as stated\\\",\\n    \\\"organization_aliases\\\": [\\\"any alternate names or abbreviations used\\\"],\\n    \\\"key_dates\\\": [\\\"list of dates/deadlines mentioned\\\"],\\n    \\\"action_items\\\": [\\\"list of action items or next steps\\\"],\\n    \\\"document_type_detected\\\": \\\"string — meeting notes / proposal / brief / etc\\\"\\n  }\\n}\\n\\nRequirements:\\n- Use null for sections with no relevant content — don't create empty strings\\n- Each section value should be a descriptive string with full detail\\n- Preserve markdown-style formatting within strings (use \\\\n for line breaks)\";\n\nconst userInput = {\n  document_summary: inputData.new_extraction.document_summary,\n  filename: inputData.new_extraction.filename,\n  ai_observations: inputData.new_extraction.ai_observations\n};\n\nconst fullPrompt = systemPrompt + '\\n\\n# INPUT\\n\\n' + JSON.stringify(userInput, null, 2);\n\nreturn [{ json: {\n  prompt: fullPrompt,\n  model: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',\n  max_tokens: 3000,\n  node_name: 'PMU_STEP1_EXTRACT',\n  workflow_session_id: validated.meeting_note_id || '',\n  workflow_id: 'project-memory-updater',\n  project_id: validated.project_id || '',\n  client_id: validated.client_id || ''\n}}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -1200,
+          -800
+        ],
+        "id": "e5f6a7b8-fmt-extract",
+        "name": "2.1_FMT_Extract"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "GDaWNcJJtLdY8Q6Y4Yv5p"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.1,
+        "position": [
+          -900,
+          -800
+        ],
+        "id": "c9d0e1f2-sub-extract",
+        "name": "2.2_SUB_Extract",
+        "onError": "continueErrorOutput",
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 5000
+      },
+      {
+        "parameters": {
+          "jsCode": "// Step 2 (Doc path): Parse extraction + format merge prompt\nconst extractResult = $input.first().json;\nconst validated = $('1.2_VAL_Input').first().json;\nconst inputData = validated.input_data;\n\n// Parse extraction result\nlet extraction = extractResult.llm_response;\nif (typeof extraction === 'string') {\n  try { extraction = JSON.parse(extraction); } catch (e) {\n    return [{ json: { _error: 'Failed to parse Step 1 extraction: ' + e.message }}];\n  }\n}\n\nconst systemPrompt = \"# MEMORY MERGE AGENT\\n\\nYou are an AI agent that maintains \\\"Project Memory\\\" for consulting projects at Jombay (HR tech, L&D sector). Your job is to merge new information into an existing project memory document.\\n\\n## CORE PRINCIPLES\\n\\n1. **Merge factual information AS STATED** — preserve exact stakeholder language\\n2. **Preserve context and nuances** — don't lose important details\\n3. **NEVER modify proper nouns** — company names, people names, locations must be preserved EXACTLY as they appear in the input, even if they seem misspelled or unfamiliar\\n4. **Organizational coherence** — All references to the client must use ONE consistent name. If the extraction contains aliases (e.g., \\\"Aarti Industries\\\" and \\\"AI\\\"), pick the full formal name and use it everywhere. Never split one organization into multiple entities.\\n5. **Speaker vs participant awareness** — People who SPOKE in meetings (FGD facilitators, HR leaders giving briefs) are not necessarily PARTICIPANTS in the program. Only list someone as a participant/target audience if the inputs explicitly describe them as such.\\n6. **Identify conflicts and flag them** — don't resolve conflicts yourself\\n7. **Check if new info answers previous questions** — resolve them silently\\n8. **Maintain clean, readable structure**\\n\\n## MEMORY STRUCTURE GUIDELINES\\n\\nUse these sections as needed. Adapt based on actual content:\\n\\n1. **Project Overview** — Factual description, what is being delivered\\n2. **Client Context** — Background about client, industry, size (use ONLY information from the input — do NOT use AI knowledge to fill in or correct details)\\n3. **Business Problem** — Core challenge, current state issues, why project exists\\n4. **Target Audience Description** — Who is impacted/involved, characteristics, needs. IMPORTANT: Only include people explicitly identified as participants/target audience in the inputs. Do NOT include meeting speakers, interviewees, or HR stakeholders unless the inputs explicitly say they are also participants.\\n5. **Stakeholder Expectations** — What stakeholders want, attributed to specific people\\n6. **Success Criteria** — How success will be measured, metrics, KPIs\\n7. **Constraints & Realities** — Limitations, ground realities, resource constraints\\n8. **Key Decisions Taken** — Concrete decisions, who decided, when, rationale\\n9. **Open Questions** — Questions raised by client/stakeholders, unresolved points\\n10. **Behavioral Observations** — Patterns, dynamics, culture notes\\n11. **Potential Risks** — Risks identified or implied\\n\\nSection rules:\\n- Only include sections with actual content\\n- Add new sections if needed (e.g., \\\"Technical Requirements\\\", \\\"Budget Breakdown\\\")\\n- Maintain chronological flow within sections\\n- Use markdown formatting: headers, lists, emphasis\\n- Attribute statements to speakers when known\\n\\n## CONFLICT DETECTION\\n\\nWhen new information contradicts existing memory:\\n1. DO NOT choose a version yourself\\n2. FLAG it in the memory with: \\\"[CONFLICT — See changes_made.conflicts_detected]\\\"\\n3. Record both versions in conflicts_detected\\n\\n## NATURAL QUESTION RESOLUTION\\n\\nWhen new information answers previous clarification questions or open questions:\\n1. Update memory silently with the answer\\n2. Record which questions were resolved in changes_made\\n3. Don't mention the question was answered — just update memory naturally\\n\\n## OUTPUT FORMAT\\n\\nReturn ONLY valid JSON:\\n\\n{\\n  \\\"project_memory_text\\\": \\\"# Project Memory\\\\n\\\\n## Section...\\\\n...\\\",\\n  \\\"changes_made\\\": {\\n    \\\"sections_updated\\\": [\\\"list of section names that were modified or created\\\"],\\n    \\\"conflicts_detected\\\": [\\n      {\\n        \\\"section\\\": \\\"section name\\\",\\n        \\\"existing_value\\\": \\\"what memory currently says\\\",\\n        \\\"new_value\\\": \\\"what new information says\\\",\\n        \\\"description\\\": \\\"brief description of the conflict\\\"\\n      }\\n    ],\\n    \\\"questions_resolved\\\": [\\n      {\\n        \\\"question_summary\\\": \\\"brief description of the question that was answered\\\",\\n        \\\"resolution\\\": \\\"how it was resolved\\\"\\n      }\\n    ],\\n    \\\"summary\\\": \\\"1-2 sentence summary of what changed\\\"\\n  }\\n}\\n\\nRequirements:\\n- project_memory_text is a complete markdown string (not a diff — full updated memory)\\n- changes_made.sections_updated lists ALL sections that were touched\\n- conflicts_detected can be empty array if no conflicts\\n- questions_resolved can be empty array if no questions were answered\\n- Use \\\\n for line breaks in markdown text\";\n\n// Build merge input based on mode\nlet mergeInput;\nif (validated.mode === '2A_INITIAL') {\n  mergeInput = {\n    mode: '2A_INITIAL',\n    mode_description: 'Building initial project memory from first document',\n    extracted_information: extraction,\n    current_project_memory_text: null,\n    client_name: extraction.client_name || null\n  };\n} else {\n  // 2B — merge with existing\n  mergeInput = {\n    mode: '2B_DOCUMENT_MERGE',\n    mode_description: 'Merging new document extraction into existing memory',\n    extracted_information: extraction,\n    current_project_memory_text: inputData.current_project_memory_text,\n    client_name: extraction.client_name || null\n  };\n}\n\nconst fullPrompt = systemPrompt + '\\n\\n# INPUT\\n\\n' + JSON.stringify(mergeInput, null, 2);\n\nreturn [{ json: {\n  prompt: fullPrompt,\n  model: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',\n  max_tokens: 8000,\n  node_name: 'PMU_STEP2_MERGE_DOC',\n  workflow_session_id: validated.meeting_note_id || '',\n  workflow_id: 'project-memory-updater',\n  project_id: validated.project_id || '',\n  client_id: validated.client_id || ''\n}}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -600,
+          -800
+        ],
+        "id": "a1b2c3d4-fmt-merge-doc",
+        "name": "2.3_FMT_MergeDoc"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Step 2 (Corrections path): Format merge prompt for 2C\nconst validated = $('1.2_VAL_Input').first().json;\nconst inputData = validated.input_data;\n\nconst systemPrompt = \"# MEMORY MERGE AGENT\\n\\nYou are an AI agent that maintains \\\"Project Memory\\\" for consulting projects at Jombay (HR tech, L&D sector). Your job is to merge new information into an existing project memory document.\\n\\n## CORE PRINCIPLES\\n\\n1. **Merge factual information AS STATED** — preserve exact stakeholder language\\n2. **Preserve context and nuances** — don't lose important details\\n3. **NEVER modify proper nouns** — company names, people names, locations must be preserved EXACTLY as they appear in the input, even if they seem misspelled or unfamiliar\\n4. **Organizational coherence** — All references to the client must use ONE consistent name. If the extraction contains aliases (e.g., \\\"Aarti Industries\\\" and \\\"AI\\\"), pick the full formal name and use it everywhere. Never split one organization into multiple entities.\\n5. **Speaker vs participant awareness** — People who SPOKE in meetings (FGD facilitators, HR leaders giving briefs) are not necessarily PARTICIPANTS in the program. Only list someone as a participant/target audience if the inputs explicitly describe them as such.\\n6. **Identify conflicts and flag them** — don't resolve conflicts yourself\\n7. **Check if new info answers previous questions** — resolve them silently\\n8. **Maintain clean, readable structure**\\n\\n## MEMORY STRUCTURE GUIDELINES\\n\\nUse these sections as needed. Adapt based on actual content:\\n\\n1. **Project Overview** — Factual description, what is being delivered\\n2. **Client Context** — Background about client, industry, size (use ONLY information from the input — do NOT use AI knowledge to fill in or correct details)\\n3. **Business Problem** — Core challenge, current state issues, why project exists\\n4. **Target Audience Description** — Who is impacted/involved, characteristics, needs. IMPORTANT: Only include people explicitly identified as participants/target audience in the inputs. Do NOT include meeting speakers, interviewees, or HR stakeholders unless the inputs explicitly say they are also participants.\\n5. **Stakeholder Expectations** — What stakeholders want, attributed to specific people\\n6. **Success Criteria** — How success will be measured, metrics, KPIs\\n7. **Constraints & Realities** — Limitations, ground realities, resource constraints\\n8. **Key Decisions Taken** — Concrete decisions, who decided, when, rationale\\n9. **Open Questions** — Questions raised by client/stakeholders, unresolved points\\n10. **Behavioral Observations** — Patterns, dynamics, culture notes\\n11. **Potential Risks** — Risks identified or implied\\n\\nSection rules:\\n- Only include sections with actual content\\n- Add new sections if needed (e.g., \\\"Technical Requirements\\\", \\\"Budget Breakdown\\\")\\n- Maintain chronological flow within sections\\n- Use markdown formatting: headers, lists, emphasis\\n- Attribute statements to speakers when known\\n\\n## CONFLICT DETECTION\\n\\nWhen new information contradicts existing memory:\\n1. DO NOT choose a version yourself\\n2. FLAG it in the memory with: \\\"[CONFLICT — See changes_made.conflicts_detected]\\\"\\n3. Record both versions in conflicts_detected\\n\\n## NATURAL QUESTION RESOLUTION\\n\\nWhen new information answers previous clarification questions or open questions:\\n1. Update memory silently with the answer\\n2. Record which questions were resolved in changes_made\\n3. Don't mention the question was answered — just update memory naturally\\n\\n## OUTPUT FORMAT\\n\\nReturn ONLY valid JSON:\\n\\n{\\n  \\\"project_memory_text\\\": \\\"# Project Memory\\\\n\\\\n## Section...\\\\n...\\\",\\n  \\\"changes_made\\\": {\\n    \\\"sections_updated\\\": [\\\"list of section names that were modified or created\\\"],\\n    \\\"conflicts_detected\\\": [\\n      {\\n        \\\"section\\\": \\\"section name\\\",\\n        \\\"existing_value\\\": \\\"what memory currently says\\\",\\n        \\\"new_value\\\": \\\"what new information says\\\",\\n        \\\"description\\\": \\\"brief description of the conflict\\\"\\n      }\\n    ],\\n    \\\"questions_resolved\\\": [\\n      {\\n        \\\"question_summary\\\": \\\"brief description of the question that was answered\\\",\\n        \\\"resolution\\\": \\\"how it was resolved\\\"\\n      }\\n    ],\\n    \\\"summary\\\": \\\"1-2 sentence summary of what changed\\\"\\n  }\\n}\\n\\nRequirements:\\n- project_memory_text is a complete markdown string (not a diff — full updated memory)\\n- changes_made.sections_updated lists ALL sections that were touched\\n- conflicts_detected can be empty array if no conflicts\\n- questions_resolved can be empty array if no questions were answered\\n- Use \\\\n for line breaks in markdown text\";\n\nconst mergeInput = {\n  mode: '2C_CORRECTIONS',\n  mode_description: 'Applying user corrections and clarification answers to existing memory',\n  extracted_information: null,\n  current_project_memory_text: inputData.current_project_memory_text,\n  clarification_answers: inputData.clarification_answers,\n  freeform_corrections: inputData.freeform_corrections\n};\n\nconst fullPrompt = systemPrompt + '\\n\\n# INPUT\\n\\n' + JSON.stringify(mergeInput, null, 2);\n\nreturn [{ json: {\n  prompt: fullPrompt,\n  model: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',\n  max_tokens: 8000,\n  node_name: 'PMU_STEP2_MERGE_CORR',\n  workflow_session_id: validated.meeting_note_id || '',\n  workflow_id: 'project-memory-updater',\n  project_id: validated.project_id || '',\n  client_id: validated.client_id || ''\n}}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -600,
+          -1100
+        ],
+        "id": "e5f6a7b8-fmt-merge-corr",
+        "name": "2.4_FMT_MergeCorr"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "GDaWNcJJtLdY8Q6Y4Yv5p"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.1,
+        "position": [
+          -300,
+          -900
+        ],
+        "id": "d4e5f6a7-sub-merge",
+        "name": "3.1_SUB_Merge",
+        "onError": "continueErrorOutput",
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 5000
+      },
+      {
+        "parameters": {
+          "jsCode": "// Step 3: Parse merge output + format questions prompt + carry forward memory & changes\nconst mergeResult = $input.first().json;\nconst validated = $('1.2_VAL_Input').first().json;\n\n// Parse merge result\nlet mergeData = mergeResult.llm_response;\nif (typeof mergeData === 'string') {\n  try { mergeData = JSON.parse(mergeData); } catch (e) {\n    return [{ json: { _error: 'Failed to parse Step 2 merge output: ' + e.message }}];\n  }\n}\n\nif (!mergeData || !mergeData.project_memory_text) {\n  return [{ json: { _error: 'Step 2 output missing project_memory_text' }}];\n}\n\nconst systemPrompt = \"# QUESTION GENERATION AGENT\\n\\nYou are an AI agent that analyzes project memory and generates clarification questions for consulting projects at Jombay (HR tech, L&D sector).\\n\\n## YOUR TASK\\n\\nAnalyze the updated project memory and generate a MAXIMUM of 3 critical clarification questions. Focus only on the most important gaps, conflicts, or ambiguities.\\n\\n## QUESTION PRIORITIES\\n\\n- HIGH: Blocks progress, affects deliverables/timeline/budget, involves money/resources\\n- MEDIUM: Important but doesn't block immediate work, affects scope/approach/quality\\n- LOW: Nice-to-have clarity, doesn't impact immediate work\\n\\n## QUESTION CATEGORIES\\n\\n- CONFLICT: Contradictory information from different sources\\n- GAP: Missing critical information needed to proceed\\n- AMBIGUITY: Unclear or vague statement needing specificity\\n- VERIFICATION: Confirm assumption or interpretation\\n\\n## RULES\\n\\n- Generate MAX 3 questions (fewer is better if memory is clear)\\n- Focus on what would be MOST useful for the consultant\\n- Don't ask about information that's already clear in the memory\\n- Each question must be specific and actionable\\n- Provide AI recommendations with reasoning\\n\\n## OUTPUT FORMAT\\n\\nReturn ONLY valid JSON:\\n\\n{\\n  \\\"clarification_questions\\\": [\\n    {\\n      \\\"id\\\": \\\"CQ-001\\\",\\n      \\\"priority\\\": \\\"HIGH | MEDIUM | LOW\\\",\\n      \\\"category\\\": \\\"CONFLICT | GAP | AMBIGUITY | VERIFICATION\\\",\\n      \\\"question\\\": \\\"Specific, actionable question\\\",\\n      \\\"what_we_currently_have\\\": \\\"Current state showing the issue\\\",\\n      \\\"what_answer_should_look_like\\\": \\\"Example of good answer\\\",\\n      \\\"ai_recommendation\\\": {\\n        \\\"suggestion\\\": \\\"Recommended answer/action\\\",\\n        \\\"reasoning\\\": \\\"Why this recommendation makes sense\\\",\\n        \\\"confidence\\\": \\\"HIGH | MEDIUM | LOW — with brief explanation\\\"\\n      }\\n    }\\n  ]\\n}\\n\\nRequirements:\\n- clarification_questions is an array (can be empty [] if memory is complete and clear)\\n- Maximum 3 questions\\n- All fields in each question object are required\\n- Auto-generate sequential IDs: CQ-001, CQ-002, CQ-003\\n- Be specific about what information is needed\";\n\nconst questionInput = {\n  project_memory_text: mergeData.project_memory_text,\n  changes_made: mergeData.changes_made || null,\n  mode: validated.mode,\n  mode_description: validated.mode_description\n};\n\nconst fullPrompt = systemPrompt + '\\n\\n# INPUT\\n\\n' + JSON.stringify(questionInput, null, 2);\n\nreturn [{ json: {\n  prompt: fullPrompt,\n  model: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',\n  max_tokens: 2000,\n  node_name: 'PMU_STEP3_QUESTIONS',\n  workflow_session_id: validated.meeting_note_id || '',\n  workflow_id: 'project-memory-updater',\n  project_id: validated.project_id || '',\n  client_id: validated.client_id || '',\n  // Carry forward Step 2 outputs for JS_Package\n  _step2_memory: mergeData.project_memory_text,\n  _step2_changes: mergeData.changes_made || null\n}}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          0,
+          -900
+        ],
+        "id": "b8c9d0e1-fmt-questions",
+        "name": "3.2_FMT_Questions"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "GDaWNcJJtLdY8Q6Y4Yv5p"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.1,
+        "position": [
+          300,
+          -900
+        ],
+        "id": "f2a3b4c5-sub-questions",
+        "name": "3.3_SUB_Questions",
+        "onError": "continueErrorOutput",
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 5000
+      },
+      {
+        "parameters": {
+          "jsCode": "// Package final output: combine Step 2 memory + Step 3 questions\nconst questionsResult = $input.first().json;\nconst validated = $('1.2_VAL_Input').first().json;\nconst fmtQuestionsData = $('3.2_FMT_Questions').first().json;\n\n// Get carried-forward Step 2 data\nconst step2Memory = fmtQuestionsData._step2_memory;\nconst step2Changes = fmtQuestionsData._step2_changes;\n\nif (!step2Memory) {\n  return [{ json: {\n    memory_status: 'error',\n    error_message: 'Step 2 memory not available in package step',\n    project_id: validated.project_id,\n    client_id: validated.client_id,\n    meeting_note_id: validated.meeting_note_id\n  }}];\n}\n\n// Parse questions result\nlet questionsData = questionsResult.llm_response;\nif (typeof questionsData === 'string') {\n  try { questionsData = JSON.parse(questionsData); } catch (e) {\n    // Non-fatal: proceed with empty questions\n    questionsData = { clarification_questions: [] };\n  }\n}\n\nconst questions = Array.isArray(questionsData.clarification_questions)\n  ? questionsData.clarification_questions\n  : [];\n\n// Determine status\nlet memory_status = 'updated';\nif (questions.length > 0) {\n  memory_status = 'clarification_needed';\n}\n\nreturn [{ json: {\n  memory_status: memory_status,\n  current_project_memory: step2Memory,\n  clarification_questions: questions,\n  metadata: {\n    changes_made: step2Changes,\n    mode: validated.mode,\n    mode_description: validated.mode_description\n  },\n  project_id: validated.project_id,\n  client_id: validated.client_id,\n  meeting_note_id: validated.meeting_note_id\n}}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          600,
+          -900
+        ],
+        "id": "a7b8c9d0-js-package",
+        "name": "4.1_JS_Package"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "status-gate-1",
+                "leftValue": "={{ $json.memory_status }}",
+                "rightValue": "error",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          900,
+          -900
+        ],
+        "id": "e1f2a3b4-if-status",
+        "name": "4.2_IF_Status"
+      },
+      {
+        "parameters": {
+          "method": "PUT",
+          "url": "=https://coreapi.ur-nl.com/projects/{{ $('1.1_TRG_Webhook').item.json.body.project_id }}/update_project_memory",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-Subdomain",
+                "value": "dashboard"
+              }
+            ]
+          },
+          "sendBody": true,
+          "contentType": "raw",
+          "rawContentType": "application/json",
+          "body": "={ \"project\": { \"current_project_memory\": {{ JSON.stringify($json.current_project_memory || '') }}, \"clarification_questions\": {{ JSON.stringify(JSON.stringify($json.clarification_questions || [])) }}, \"memory_status\": \"{{ $json.memory_status }}\", \"meeting_note_id\": \"{{ $('1.1_TRG_Webhook').first().json.body.meeting_note_id }}\" } }",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.3,
+        "position": [
+          1200,
+          -800
+        ],
+        "id": "5688c235-api-success-node",
+        "name": "4.3_API_Success",
+        "onError": "continueErrorOutput",
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "9fZP8bOKRNJtilO1",
+            "name": "Jombay Staging API"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// Format error for API reporting\nconst input = $input.first().json;\n\n// Handle errors from validation, LLM failure, parse failure, or _error carry-through\nconst errorMessage = input._error\n  || input.error_message\n  || (input.error ? input.error.message : null)\n  || input.errorMessage\n  || 'Unknown error occurred';\n\nlet webhookBody;\ntry {\n  webhookBody = $('1.1_TRG_Webhook').first().json.body;\n} catch (e) {\n  webhookBody = {};\n}\n\nreturn [{ json: {\n  memory_status: 'error',\n  error_message: errorMessage,\n  project_id: webhookBody.project_id || input.project_id || '',\n  client_id: webhookBody.client_id || input.client_id || '',\n  meeting_note_id: webhookBody.meeting_note_id || input.meeting_note_id || ''\n}}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1200,
+          -1100
+        ],
+        "id": "8cd24cfd-err-format-node",
+        "name": "5.1_ERR_Format"
+      },
+      {
+        "parameters": {
+          "method": "PUT",
+          "url": "=https://coreapi.ur-nl.com/projects/{{ $json.project_id }}/update_memory_failed",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-Subdomain",
+                "value": "dashboard"
+              }
+            ]
+          },
+          "sendBody": true,
+          "contentType": "raw",
+          "rawContentType": "application/json",
+          "body": "={ \"project\": { \"memory_status\": \"error\", \"error_message\": \"{{ $json.error_message }}\", \"meeting_note_id\": \"{{ $json.meeting_note_id }}\" } }",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.3,
+        "position": [
+          1500,
+          -1100
+        ],
+        "id": "8cc7be0c-api-error-node",
+        "name": "5.2_API_Error",
+        "onError": "continueErrorOutput",
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "9fZP8bOKRNJtilO1",
+            "name": "Jombay Staging API"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "1.1_TRG_Webhook": {
+        "main": [
+          [
+            {
+              "node": "1.2_VAL_Input",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "1.2_VAL_Input": {
+        "main": [
+          [
+            {
+              "node": "1.3_IF_Valid",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "1.3_IF_Valid": {
+        "main": [
+          [
+            {
+              "node": "1.4_IF_NeedStep1",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "5.1_ERR_Format",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "1.4_IF_NeedStep1": {
+        "main": [
+          [
+            {
+              "node": "2.1_FMT_Extract",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "2.4_FMT_MergeCorr",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "2.1_FMT_Extract": {
+        "main": [
+          [
+            {
+              "node": "2.2_SUB_Extract",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "2.2_SUB_Extract": {
+        "main": [
+          [
+            {
+              "node": "2.3_FMT_MergeDoc",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "5.1_ERR_Format",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "2.3_FMT_MergeDoc": {
+        "main": [
+          [
+            {
+              "node": "3.1_SUB_Merge",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "2.4_FMT_MergeCorr": {
+        "main": [
+          [
+            {
+              "node": "3.1_SUB_Merge",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "3.1_SUB_Merge": {
+        "main": [
+          [
+            {
+              "node": "3.2_FMT_Questions",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "5.1_ERR_Format",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "3.2_FMT_Questions": {
+        "main": [
+          [
+            {
+              "node": "3.3_SUB_Questions",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "3.3_SUB_Questions": {
+        "main": [
+          [
+            {
+              "node": "4.1_JS_Package",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "5.1_ERR_Format",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "4.1_JS_Package": {
+        "main": [
+          [
+            {
+              "node": "4.2_IF_Status",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "4.2_IF_Status": {
+        "main": [
+          [
+            {
+              "node": "5.1_ERR_Format",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "4.3_API_Success",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "5.1_ERR_Format": {
+        "main": [
+          [
+            {
+              "node": "5.2_API_Error",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Niket Puranik",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-02-24T06:22:22.657Z",
+        "id": 4796,
+        "workflowId": "uX4p9Kt3Ztz59NEO",
+        "versionId": "bd59fbd3-3d02-49bc-8d5f-f028bbcc4b26",
+        "event": "deactivated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-24T06:22:22.678Z",
+        "id": 4797,
+        "workflowId": "uX4p9Kt3Ztz59NEO",
+        "versionId": "bd59fbd3-3d02-49bc-8d5f-f028bbcc4b26",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-24T07:10:31.232Z",
+        "id": 4862,
+        "workflowId": "uX4p9Kt3Ztz59NEO",
+        "versionId": "bd59fbd3-3d02-49bc-8d5f-f028bbcc4b26",
+        "event": "deactivated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-24T07:10:31.252Z",
+        "id": 4863,
+        "workflowId": "uX4p9Kt3Ztz59NEO",
+        "versionId": "bd59fbd3-3d02-49bc-8d5f-f028bbcc4b26",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-24T06:30:25.314Z",
+        "id": 4810,
+        "workflowId": "uX4p9Kt3Ztz59NEO",
+        "versionId": "bd59fbd3-3d02-49bc-8d5f-f028bbcc4b26",
+        "event": "deactivated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-24T06:30:25.334Z",
+        "id": 4811,
+        "workflowId": "uX4p9Kt3Ztz59NEO",
+        "versionId": "bd59fbd3-3d02-49bc-8d5f-f028bbcc4b26",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-24T07:16:23.758Z",
+        "id": 4878,
+        "workflowId": "uX4p9Kt3Ztz59NEO",
+        "versionId": "bd59fbd3-3d02-49bc-8d5f-f028bbcc4b26",
+        "event": "deactivated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-24T07:16:23.777Z",
+        "id": 4879,
+        "workflowId": "uX4p9Kt3Ztz59NEO",
+        "versionId": "bd59fbd3-3d02-49bc-8d5f-f028bbcc4b26",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-24T07:21:42.930Z",
+        "id": 4895,
+        "workflowId": "uX4p9Kt3Ztz59NEO",
+        "versionId": "bd59fbd3-3d02-49bc-8d5f-f028bbcc4b26",
+        "event": "deactivated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      },
+      {
+        "createdAt": "2026-02-24T07:21:42.950Z",
+        "id": 4896,
+        "workflowId": "uX4p9Kt3Ztz59NEO",
+        "versionId": "bd59fbd3-3d02-49bc-8d5f-f028bbcc4b26",
+        "event": "activated",
+        "userId": "8083cc02-c696-4bbe-91a2-08d8a36f6735"
+      }
+    ]
+  }
 }
