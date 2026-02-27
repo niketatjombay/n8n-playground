@@ -1,8 +1,40 @@
-# Session Slides v2 — Architecture Proposal
+# Session Slides v2 → v3 — Architecture Document
 
-**Status:** COMPLETE — All 10 steps implemented
-**Date:** 2026-02-21
+**Status:** v2 COMPLETE — All 10 steps implemented | v3 APPROVED — Design at `docs/plans/2026-02-27-session-slides-v3-design.md`
+**Date:** 2026-02-21 (v2) | 2026-02-27 (v3 design approved)
 **Based on:** Execution 12678 (full-data run) + Execution 13300 (regeneration run)
+
+---
+
+## v3 Changes (Approved 2026-02-27)
+
+Three consultant-reported issues drive v3:
+1. **Outline sequence not followed** — slides don't match client-approved outline order
+2. **Activities missed** — activities from outline absent in output
+3. **Target audience ignored** — content appropriate for junior audiences even for senior sessions
+
+### Root Causes Found
+- `outline_alignment` is computed and distributed but **dropped** in `_fmt_group_template.js` — never injected into content generation prompt
+- No chronological order instruction in `_fmt_alignoutline_node.js`
+- No programmatic validation that all outline activities made it into slides
+- `seniority_of_cohort` flows through pipeline but Agent 2 has zero adaptation instructions
+- `sessionType`, `totalDuration`, `additionalInstructions` not propagated to all stages
+
+### v3 Design Summary (5 changes + 1 new node)
+
+1. **Outline → 17-Section Mapping** (`_fmt_alignoutline_node.js` rewrite): The 17 slide types are SECTIONS, not fixed slides. LLM acts as expert presentation designer — decides how many slides each section needs based on content density. Preserves outline chronological order. Considers seniority and session type.
+
+2. **Module-Based Group Packing** (`_js_splitgroups_node.js` rewrite): Groups slides by outline module boundaries into 7 slots (not even count distribution). Static slides → Groups 1 & 7. Outline modules → Groups 2-6. Seniority and session type injected into Agent 2 system prompt.
+
+3. **Outline + KB Injection** (`_fmt_group_template.js` update): Injects `group.outline_alignment` (per-slide outline evidence) and per-slide KB content into content generation prompt. Each slide gets explicit instruction: "deliver this outline_excerpt."
+
+4. **Expanded Tagging** (`_fmt_tag_content_node.js` update): Maps KB and pre-work to specific expanded slide IDs (e.g., `slide_9_1`, `slide_9_2`) instead of just section types.
+
+5. **Session Constraints Propagation**: `totalDuration`, `sessionType`, `additionalInstructions` flow to ALL prompt stages (AlignOutline, Blueprint, Content Gen, QC, Scripts).
+
+6. **NEW: Coverage Validation** (`_js_coverage_check_node.js`): Pure JS node after content merge, before QC. Cross-checks every outline item has a generated slide. Feeds coverage report to QC quality node.
+
+See full design: `docs/plans/2026-02-27-session-slides-v3-design.md`
 
 ---
 
