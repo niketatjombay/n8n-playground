@@ -26,20 +26,39 @@ for (const [key, review] of Object.entries(slideReviews)) {
   }
 }
 
-// Same 7 group definitions as step 7
-const groupDefs = [
-  { key: 'group_1', name: 'Title & Introduction', slides: ['slide_1','slide_2','slide_3'], types: 'Session title, Jombay intro, Trainer intro' },
-  { key: 'group_2', name: 'Setup & Framing', slides: ['slide_4','slide_5'], types: 'Agenda, Working Agreement' },
-  { key: 'group_3', name: 'Context & Objectives', slides: ['slide_6','slide_7'], types: 'Program overview, Objectives' },
-  { key: 'group_4', name: 'Core Content', slides: ['slide_8','slide_9','slide_10'], types: 'Module breaker, Content (AC), Quote' },
-  { key: 'group_5', name: 'Engagement & Application', slides: ['slide_11','slide_12'], types: 'Discussion/Reflection (RO), Activity (CE)' },
-  { key: 'group_6', name: 'Transition & Reflection', slides: ['slide_13','slide_14','slide_15'], types: 'Break, Questions, Feedback' },
-  { key: 'group_7', name: 'Action & Closing', slides: ['slide_16','slide_17'], types: 'Call to Action (AE), Closing' }
-];
+// Read dynamic group definitions from SplitGroups (v3)
+const splitGroupsData = $('4.1_JS_SplitGroups').first().json;
+const dynamicGroups = splitGroupsData.groups || {};
+
+const groupDefs = [];
+for (let i = 1; i <= 7; i++) {
+  const groupKey = 'group_' + i;
+  const group = dynamicGroups[groupKey];
+  if (group && group.slides && group.slides.length > 0) {
+    groupDefs.push({
+      key: groupKey,
+      name: group.name,
+      slides: group.slides,
+      types: group.slide_types || group.slides.map(k => (slideTemplate[k] || {}).type || '').join(', ')
+    });
+  } else {
+    groupDefs.push({
+      key: groupKey,
+      name: 'Empty',
+      slides: [],
+      types: ''
+    });
+  }
+}
 
 // Build per-group data with targeted pre-work (same tagging as step 7)
 const groups = {};
 for (const def of groupDefs) {
+  if (def.slides.length === 0) {
+    groups[def.key] = { name: 'Empty', slides: [], slide_types: '', content: {}, blueprint: {}, slide_template: {}, qc_flags: {}, tagged_pre_work: {} };
+    continue;
+  }
+
   const groupContent = {};
   const groupBlueprint = {};
   const groupTemplate = {};
@@ -171,7 +190,16 @@ IMPORTANT:
 - estimated_duration_minutes is REQUIRED for every slide — integer value
 - debrief_questions: REQUIRED non-empty array for slides 11, 12, 14 (discussion/activity/questions types)
 - activity_run_of_show: REQUIRED for slide 12 (activity type) with step-by-step timing
-- Do NOT repeat on-slide content — the script is what the facilitator SAYS, not what's on the slide`;
+- Do NOT repeat on-slide content — the script is what the facilitator SAYS, not what's on the slide
+
+=== SESSION TYPE ===
+Delivery format: ${validatedInput.session_constraints?.sessionType || validatedInput.session_constraints?.session_type || 'Not specified'}
+Total duration: ${validatedInput.session_constraints?.totalDuration || validatedInput.session_constraints?.total_duration || 'Not specified'}
+- Virtual: breakout rooms, screen sharing, chat polls, shorter pacing
+- In-person: physical movement, group formations, props, whiteboard
+Adapt all scripts and modality_notes to this session type.
+
+${(validatedInput.session_constraints?.additionalInstructions || validatedInput.session_constraints?.additional_instructions) ? '=== USER GUIDELINES ===\n' + (validatedInput.session_constraints.additionalInstructions || validatedInput.session_constraints.additional_instructions) + '\nFollow these in your scripts unless they conflict with the session outline.' : ''}`;
 
 return [{ json: {
   groups: groups,
