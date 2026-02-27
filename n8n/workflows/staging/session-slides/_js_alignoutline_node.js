@@ -39,9 +39,23 @@ const typeMap = {
   'Closing':                    { gagne: 'Enhance Retention',  kolb: null, ages: 'Emotion' }
 };
 
-// Extract slide_plan
+// Extract slide_plan — handle both array and object formats
 let slidePlan = parsed.slide_plan || [];
-if (!Array.isArray(slidePlan)) slidePlan = [];
+if (!Array.isArray(slidePlan) && typeof slidePlan === 'object') {
+  // LLM returned slide_plan as object keyed by slide_id — convert to array
+  slidePlan = Object.entries(slidePlan).map(([key, val], idx) => ({
+    slide_number: val.slide_number || parseInt(key.replace(/\D/g, '')) || (idx + 1),
+    slide_type: val.slide_type || val.section_name || 'Content (AC)',
+    section_number: val.section_number || val.section || parseInt(key.replace(/\D/g, '')) || (idx + 1),
+    outline_ref: val.outline_ref || '',
+    outline_topic: val.outline_topic || val.title || '',
+    outline_excerpt: val.outline_excerpt || val.content_summary || '',
+    alignment_rationale: val.alignment_rationale || '',
+    estimated_duration_minutes: val.estimated_duration_minutes || 0
+  }));
+} else if (!Array.isArray(slidePlan)) {
+  slidePlan = [];
+}
 
 // If SUB failed or empty plan, check if we have a pre-built result (from fallback path)
 if (slidePlan.length === 0 && parsed.slide_template) {

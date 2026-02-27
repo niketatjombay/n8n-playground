@@ -39,6 +39,9 @@ try {
       ? JSON.parse(outlineNode.llm_response) : outlineNode.llm_response;
     formattedOutline = parsed || {};
   }
+  // Strip metadata-only keys that are not outline content
+  delete formattedOutline.token_usage;
+  delete formattedOutline.usage;
   extractedText = outlineNode.extracted_text || '';
   if (!extractedText) {
     try { extractedText = $('1.2_PREP_Input').first().json.extracted_text || ''; } catch(e2) {}
@@ -47,11 +50,12 @@ try {
   formattedOutline = {};
 }
 
-// Check if outline has meaningful data
+// Check if outline has meaningful data (not just metadata)
 const hasModules = Array.isArray(formattedOutline.modules) && formattedOutline.modules.length > 0;
 const hasSessions = formattedOutline.training_content && Array.isArray(formattedOutline.training_content.sessions) && formattedOutline.training_content.sessions.length > 0;
 const hasTopics = Array.isArray(formattedOutline.topics) && formattedOutline.topics.length > 0;
-const hasContent = Object.keys(formattedOutline).length > 0 && JSON.stringify(formattedOutline).length > 100;
+const contentKeys = Object.keys(formattedOutline).filter(k => !['outline_source'].includes(k));
+const hasContent = contentKeys.length > 0 && JSON.stringify(formattedOutline).length > 100;
 const hasOutlineData = hasModules || hasSessions || hasTopics || hasContent;
 
 // Extract session context from validated input
