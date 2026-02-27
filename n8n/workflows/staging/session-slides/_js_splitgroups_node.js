@@ -58,6 +58,12 @@ try {
 const slideTemplate = Object.keys(dynamicTemplate).length > 0 ? dynamicTemplate : defaultSlideTemplate;
 if (Object.keys(dynamicTemplate).length === 0) totalSlides = Object.keys(slideTemplate).length || 17;
 
+// Read delivery_sequence from alignment node
+let deliverySequence = [];
+try {
+  deliverySequence = $('2.0d_JS_AlignOutline').first().json.delivery_sequence || [];
+} catch(e) {}
+
 // Full pre-work slides (keyed by slide_id like "slide_1_1", "slide_2_3", etc.)
 const preWorkSlides = validatedInput.pre_work_slides || {};
 
@@ -68,35 +74,95 @@ for (const unit of kbResults) {
   if (id) kbMap[id] = unit;
 }
 
-// Dynamic group distribution — evenly across 7 groups
-const groupNames = [
-  'Title & Introduction',
-  'Setup & Framing',
-  'Context & Objectives',
-  'Core Content',
-  'Engagement & Application',
-  'Transition & Reflection',
-  'Action & Closing'
-];
-const base = Math.floor(totalSlides / 7);
-const remainder = totalSlides % 7;
-const sizes = Array(7).fill(base);
-// Give remainder to middle groups (content-heavy) first
-const priority = [3, 4, 5, 2, 1, 6, 0];
-for (let i = 0; i < remainder; i++) {
-  sizes[priority[i]]++;
-}
-let slideIdx = 1;
-const groupDefs = groupNames.map((name, i) => {
-  const slides = [];
-  const types = [];
-  for (let j = 0; j < sizes[i]; j++) {
-    const key = 'slide_' + slideIdx;
-    slides.push(key);
-    types.push((slideTemplate[key] || {}).type || '');
-    slideIdx++;
+// Module-based group distribution — pack by outline module boundaries
+// Group 1: Static opening (section_numbers 1-4)
+// Groups 2-6: Content modules (packed by outline_section boundaries)
+// Group 7: Static closing (section_numbers 14-17)
+const STATIC_OPEN = [1, 2, 3, 4];
+const STATIC_CLOSE = [14, 15, 16, 17];
+
+const openingSlides = [];
+const closingSlides = [];
+const contentSlides = [];
+
+for (let i = 1; i <= totalSlides; i++) {
+  const key = 'slide_' + i;
+  const sectionNum = (slideTemplate[key] || {}).section_number || i;
+
+  if (STATIC_OPEN.includes(sectionNum)) {
+    openingSlides.push(key);
+  } else if (STATIC_CLOSE.includes(sectionNum)) {
+    closingSlides.push(key);
+  } else {
+    contentSlides.push({ key, sectionNum, outline: outlineAlignment[key] || {} });
   }
-  return { key: 'group_' + (i + 1), name, slides, types: types.join(', ') };
+}
+
+// Group content slides by outline module (consecutive slides sharing same outline_section)
+const moduleGroups = [];
+let currentModule = null;
+let currentGroup = [];
+
+for (const slide of contentSlides) {
+  const moduleId = slide.outline.outline_section || 'section_' + slide.sectionNum;
+  if (moduleId !== currentModule && currentGroup.length > 0) {
+    moduleGroups.push({ module: currentModule, slides: currentGroup.map(s => s.key) });
+    currentGroup = [];
+  }
+  currentModule = moduleId;
+  currentGroup.push(slide);
+}
+if (currentGroup.length > 0) {
+  moduleGroups.push({ module: currentModule, slides: currentGroup.map(s => s.key) });
+}
+
+// Pack into 5 content slots (groups 2-6) — merge smallest adjacent pairs
+let packedModules = [...moduleGroups];
+while (packedModules.length > 5) {
+  let minSize = Infinity;
+  let minIdx = 0;
+  for (let i = 0; i < packedModules.length - 1; i++) {
+    const combined = packedModules[i].slides.length + packedModules[i + 1].slides.length;
+    if (combined < minSize) {
+      minSize = combined;
+      minIdx = i;
+    }
+  }
+  const merged = {
+    module: packedModules[minIdx].module + ' + ' + packedModules[minIdx + 1].module,
+    slides: [...packedModules[minIdx].slides, ...packedModules[minIdx + 1].slides]
+  };
+  packedModules.splice(minIdx, 2, merged);
+}
+
+// Build final 7 group definitions
+const groupDefs = [];
+
+groupDefs.push({
+  key: 'group_1', name: 'Opening',
+  slides: openingSlides,
+  types: openingSlides.map(k => (slideTemplate[k] || {}).type || '').join(', ')
+});
+
+for (let i = 0; i < 5; i++) {
+  if (i < packedModules.length) {
+    const mod = packedModules[i];
+    groupDefs.push({
+      key: 'group_' + (i + 2), name: mod.module || 'Content ' + (i + 1),
+      slides: mod.slides,
+      types: mod.slides.map(k => (slideTemplate[k] || {}).type || '').join(', ')
+    });
+  } else {
+    groupDefs.push({
+      key: 'group_' + (i + 2), name: 'Empty', slides: [], types: ''
+    });
+  }
+}
+
+groupDefs.push({
+  key: 'group_7', name: 'Closing',
+  slides: closingSlides,
+  types: closingSlides.map(k => (slideTemplate[k] || {}).type || '').join(', ')
 });
 
 // Build per-group data with TARGETED content distribution
@@ -272,7 +338,36 @@ IMPORTANT:
 - facilitation_tips are scannable tips (not the full script) — e.g. "Watch for anchoring to old process"
 - modality_notes are brief slide-level adaptations for delivery mode
 - Activity slides (type 12) MUST have instructions and duration_minutes
-- Every slide MUST have a headline and at least 1 bullet`;
+- Every slide MUST have a headline and at least 1 bullet
+
+=== AUDIENCE ADAPTATION ===
+Target audience seniority: ${validatedInput.project_details?.seniority_of_cohort || 'Not specified'}
+
+SENIOR (Director/VP/C-suite):
+- Strategic framing — "why this matters for your business unit"
+- Skip foundational definitions — assume they know the basics
+- Business impact language, not training jargon
+- Activities: strategic application, not skill-building drills
+- Fewer bullets, more provocative questions
+
+MID-LEVEL (Manager/Senior IC):
+- Balance theory + practical application
+- Connect to daily reality (team, projects, cross-functional work)
+- Activities: scenario practice with realistic complexity
+
+JUNIOR (Individual Contributor/New hire):
+- Step-by-step scaffolding, define terms
+- Activities: structured exercises with clear instructions
+- More bullets, more guidance, concrete examples
+
+=== SESSION TYPE ===
+Delivery format: ${validatedInput.session_constraints?.sessionType || validatedInput.session_constraints?.session_type || 'Not specified'}
+Total duration: ${validatedInput.session_constraints?.totalDuration || validatedInput.session_constraints?.total_duration || 'Not specified'}
+- Virtual: digital-first engagement, screen-sharing, breakout rooms, shorter activities
+- In-person: group work, physical movement, handouts, longer exercises
+Tailor content depth and activity design to this format and duration.
+
+${(validatedInput.session_constraints?.additionalInstructions || validatedInput.session_constraints?.additional_instructions) ? '=== USER GUIDELINES ===\n' + (validatedInput.session_constraints.additionalInstructions || validatedInput.session_constraints.additional_instructions) + '\nFollow these unless they conflict with the session outline.' : ''}`;
 
 return [{ json: {
   groups: groups,
@@ -286,6 +381,7 @@ return [{ json: {
     program_type: validatedInput.project_details.program_type || ''
   },
   session_constraints: validatedInput.session_constraints,
+  delivery_sequence: deliverySequence,
   agent2_system_prompt: agent2SystemPrompt,
   memory_id: validatedInput.memory_id,
   knowledge_base_id: validatedInput.knowledge_base_id,
