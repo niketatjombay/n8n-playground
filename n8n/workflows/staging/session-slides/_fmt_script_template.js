@@ -3,6 +3,23 @@
 const data = $('7.3_JS_PrepScripts').first().json;
 const group = data.groups.GROUP_KEY;
 
+// Skip LLM call if group has no slides (v3: some groups may be empty)
+if (!group || !group.slides || group.slides.length === 0) {
+  return [{ json: {
+    system_prompt: '',
+    prompt: '',
+    model: 'global.anthropic.claude-sonnet-4-6',
+    node_name: 'Script_GroupGROUP_NUM',
+    skip: true,
+    memory_id: data.memory_id,
+    knowledge_base_id: data.knowledge_base_id,
+    workflow_session_id: data.workflow_session_id,
+    workflow_id: data.workflow_id,
+    project_id: data.project_id,
+    client_id: data.client_id
+  }}];
+}
+
 const userPrompt = 'Write facilitator delivery scripts for the following slide group.\n\n'
   + '=== SLIDE GROUP ===\n'
   + 'Group: ' + group.name + '\n'
@@ -22,6 +39,11 @@ const userPrompt = 'Write facilitator delivery scripts for the following slide g
   + JSON.stringify(data.client_context) + '\n\n'
   + '=== SESSION CONSTRAINTS ===\n'
   + JSON.stringify(data.session_constraints) + '\n\n'
+  + ((data.session_constraints.additionalInstructions || data.session_constraints.additional_instructions || '')
+    ? '=== USER GUIDELINES ===\n'
+      + (data.session_constraints.additionalInstructions || data.session_constraints.additional_instructions) + '\n'
+      + 'Follow these in your scripts unless they conflict with the session outline.\n\n'
+    : '')
   + '=== PRE-WORK DATA (tagged for this group — ground scripts in these findings) ===\n'
   + JSON.stringify(group.tagged_pre_work) + '\n\n'
   + '=== INSTRUCTIONS ===\n'
