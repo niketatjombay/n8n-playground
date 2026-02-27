@@ -110,10 +110,14 @@ function extractTokenUsage(outputData) {
       // Paths where providers commonly stash usage info
       const candidates = [
         json.usage,
+        json.token_usage,
+        json.tokenUsage,
+        json.llm_response?.token_usage,
+        json.llm_response?.usage,
         json.response?.usage,
         json.message?.usage,
         json.data?.usage,
-        json.tokenUsage,
+        json.body?.usage,
         json.response?.body?.usage,
       ];
 
@@ -131,6 +135,8 @@ function extractTokenUsage(outputData) {
             model: usage.model || json.model || null,
             inputTokens,
             outputTokens,
+            cacheReadTokens: usage.cache_read_tokens ?? usage.cacheReadTokens ?? 0,
+            cacheWriteTokens: usage.cache_write_tokens ?? usage.cacheWriteTokens ?? 0,
             source: 'actual',
           };
         }
@@ -238,10 +244,11 @@ function buildNodeList(runData, workflowData) {
       const outputData = exec.data || null;
 
       // Token usage: prefer actual, fall back to estimated for LLM nodes
+      // Also check Execute Workflow nodes — they often carry LLM response data
       let tokenUsage = null;
-      if (isLlmNode(nodeType)) {
+      if (isLlmNode(nodeType) || isExecuteWorkflowNode(nodeType)) {
         tokenUsage = extractTokenUsage(outputData);
-        if (!tokenUsage) {
+        if (!tokenUsage && isLlmNode(nodeType)) {
           tokenUsage = estimateNodeTokenUsage(exec, workflowNode);
         }
       }
@@ -407,10 +414,12 @@ function aggregateTokenSummary(nodes) {
       if (node.tokenUsage) {
         const model = node.tokenUsage.model || 'unknown';
         if (!summary[model]) {
-          summary[model] = { inputTokens: 0, outputTokens: 0, source: node.tokenUsage.source };
+          summary[model] = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, source: node.tokenUsage.source };
         }
         summary[model].inputTokens += node.tokenUsage.inputTokens;
         summary[model].outputTokens += node.tokenUsage.outputTokens;
+        summary[model].cacheReadTokens += node.tokenUsage.cacheReadTokens || 0;
+        summary[model].cacheWriteTokens += node.tokenUsage.cacheWriteTokens || 0;
 
         // If sources differ for the same model, mark as mixed
         if (node.tokenUsage.source !== summary[model].source) {

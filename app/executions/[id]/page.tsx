@@ -13,6 +13,8 @@ interface TokenUsage {
   model: string;
   inputTokens: number;
   outputTokens: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
   source: string;
 }
 
@@ -59,7 +61,7 @@ interface ExecutionDetail {
 }
 
 interface TokenSummary {
-  [model: string]: { inputTokens: number; outputTokens: number; source: string };
+  [model: string]: { inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number; source: string };
 }
 
 interface DetailResponse {
@@ -261,6 +263,16 @@ function LlmDetailPanel({ node }: { node: NodeInfo }) {
             <span className="text-[10px] font-mono text-zinc-500">
               TOTAL <span className="text-zinc-300">{formatNumber(tokenUsage.inputTokens + tokenUsage.outputTokens)}</span>
             </span>
+            {(tokenUsage.cacheReadTokens != null && tokenUsage.cacheReadTokens > 0) && (
+              <span className="text-[10px] font-mono text-zinc-500">
+                CACHE-R <span className="text-teal-400">{formatNumber(tokenUsage.cacheReadTokens)}</span>
+              </span>
+            )}
+            {(tokenUsage.cacheWriteTokens != null && tokenUsage.cacheWriteTokens > 0) && (
+              <span className="text-[10px] font-mono text-zinc-500">
+                CACHE-W <span className="text-teal-400">{formatNumber(tokenUsage.cacheWriteTokens)}</span>
+              </span>
+            )}
             <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded border ${
               tokenUsage.source === 'actual'
                 ? 'text-emerald-500 border-emerald-500/20 bg-emerald-500/5'
@@ -509,6 +521,7 @@ export default function ExecutionDetailPage({
   }, [rawText]);
 
   const tokenEntries = data ? Object.entries(data.tokenSummary) : [];
+  const hasCacheTokens = tokenEntries.some(([, info]) => (info.cacheReadTokens || 0) > 0 || (info.cacheWriteTokens || 0) > 0);
 
   // Loading state
   if (loading) {
@@ -623,18 +636,30 @@ export default function ExecutionDetailPage({
             Token Usage
           </h2>
           <div className="bg-zinc-900/80 border border-zinc-800 rounded-lg overflow-hidden">
-            <div className="grid grid-cols-5 gap-px bg-zinc-800/30">
+            <div className={`grid gap-px bg-zinc-800/30 ${hasCacheTokens ? 'grid-cols-7' : 'grid-cols-5'}`}>
               <div className="bg-zinc-900/60 px-4 py-2 text-[10px] font-mono font-semibold uppercase tracking-wider text-zinc-500">Model</div>
               <div className="bg-zinc-900/60 px-4 py-2 text-[10px] font-mono font-semibold uppercase tracking-wider text-zinc-500 text-right">Input</div>
               <div className="bg-zinc-900/60 px-4 py-2 text-[10px] font-mono font-semibold uppercase tracking-wider text-zinc-500 text-right">Output</div>
+              {hasCacheTokens && (
+                <>
+                  <div className="bg-zinc-900/60 px-4 py-2 text-[10px] font-mono font-semibold uppercase tracking-wider text-zinc-500 text-right">Cache Read</div>
+                  <div className="bg-zinc-900/60 px-4 py-2 text-[10px] font-mono font-semibold uppercase tracking-wider text-zinc-500 text-right">Cache Write</div>
+                </>
+              )}
               <div className="bg-zinc-900/60 px-4 py-2 text-[10px] font-mono font-semibold uppercase tracking-wider text-zinc-500 text-right">Total</div>
               <div className="bg-zinc-900/60 px-4 py-2 text-[10px] font-mono font-semibold uppercase tracking-wider text-zinc-500 text-right">Source</div>
             </div>
             {tokenEntries.map(([model, info]) => (
-              <div key={model} className="grid grid-cols-5 gap-px bg-zinc-800/30">
+              <div key={model} className={`grid gap-px bg-zinc-800/30 ${hasCacheTokens ? 'grid-cols-7' : 'grid-cols-5'}`}>
                 <div className="bg-zinc-950/40 px-4 py-2.5 text-xs font-mono text-zinc-300">{model}</div>
                 <div className="bg-zinc-950/40 px-4 py-2.5 text-xs font-mono text-emerald-400 text-right">{formatNumber(info.inputTokens)}</div>
                 <div className="bg-zinc-950/40 px-4 py-2.5 text-xs font-mono text-sky-400 text-right">{formatNumber(info.outputTokens)}</div>
+                {hasCacheTokens && (
+                  <>
+                    <div className="bg-zinc-950/40 px-4 py-2.5 text-xs font-mono text-teal-400 text-right">{formatNumber(info.cacheReadTokens || 0)}</div>
+                    <div className="bg-zinc-950/40 px-4 py-2.5 text-xs font-mono text-teal-400 text-right">{formatNumber(info.cacheWriteTokens || 0)}</div>
+                  </>
+                )}
                 <div className="bg-zinc-950/40 px-4 py-2.5 text-xs font-mono text-zinc-200 font-semibold text-right">{formatNumber(info.inputTokens + info.outputTokens)}</div>
                 <div className="bg-zinc-950/40 px-4 py-2.5 text-right">
                   <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded border ${
