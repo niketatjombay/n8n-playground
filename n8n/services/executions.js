@@ -255,16 +255,28 @@ function buildNodeList(runData, workflowData) {
           'unknown';
       }
 
+      // Extract LLM-specific details from workflow node parameters
+      let llmDetail = null;
+      if (isLlmNode(nodeType) && workflowNode.parameters) {
+        const p = workflowNode.parameters;
+        llmDetail = {
+          model: p.model || p.modelId || p.options?.model || null,
+          prompt: p.prompt?.value || p.prompt || p.text?.value || p.text || null,
+          systemPrompt: p.systemMessage?.value || p.systemMessage || p.options?.systemMessage || null,
+        };
+      }
+
       nodes.push({
         name: nodeName,
         type: nodeType,
         status: exec.executionStatus || null,
         executionTimeMs: exec.executionTime ?? null,
         startTime: exec.startTime ?? null,
-        inputData: null, // reserved for future use
+        inputData: exec.inputData || null,
         outputData,
         metadata: exec.metadata || null,
         tokenUsage,
+        llmDetail,
         isSubWorkflow: isExecuteWorkflowNode(nodeType),
         subExecution: null, // populated later for sub-workflows
         error: exec.error || null,
