@@ -24,6 +24,8 @@ const sessionConstraints = validatedInput.session_constraints || {};
 const preWorkMeta = validatedInput.pre_work_metadata || {};
 const defaultSlideTemplate = validatedInput.slide_template || {};
 const contentTags = tagData.content_tags || {};
+const additionalInstructions = sessionConstraints.additionalInstructions
+  || sessionConstraints.additional_instructions || '';
 
 // Read dynamic slide template from alignment node (Phase 2: dynamic slide count)
 let totalSlides = 17;
@@ -127,6 +129,14 @@ Example:
   BAD:  { "objective": "Understand the GROW model", "bloom_level": "Understand" }
   (Too low for a leadership cohort — prefer Apply and above)
 
+AUDIENCE ADAPTATION:
+Seniority: ${projectDetails.seniority_of_cohort || 'Not specified'}
+- Senior (Director/VP/C-suite): Strategic framing, skip basic definitions, business impact language, provocative questions. Content direction should reflect executive-level depth.
+- Mid-level (Manager/Senior IC): Balance theory + application, connect to daily reality, scenario-based approaches.
+- Junior (IC/New hire): Foundational scaffolding, define terms, structured exercises, more guidance and context.
+
+Adapt your blueprint direction, key messages, and experience anchors for this audience level.
+
 APPLICATION MOMENTS:
 Identify all points where participants actively apply learning — not just formal activities.
 Types: "embedded" (apply a concept mid-discussion), "formal_activity" (structured exercise),
@@ -192,7 +202,7 @@ IMPORTANT:
 - Return EXACTLY 4 keys: session_overview, slide_blueprint, mandatory_jombay_frameworks, sensitivity_log
 - slide_blueprint must have entries for ALL ${totalSlides} slides (slide_1 through slide_${totalSlides})
 - Do NOT wrap in a container object. Return the JSON directly.
-- session_overview MUST include session_arc_narrative: a 3-5 sentence description of how the session flows from opening to closing, describing the emotional and cognitive journey.`;
+- session_overview MUST include session_arc_narrative: a 3-5 sentence description of how the session flows from opening to closing, describing the emotional and cognitive journey.${additionalInstructions ? '\n\nUSER GUIDELINES:\n' + additionalInstructions + '\nFollow these unless they conflict with the session outline (outline takes precedence).' : ''}`;
 
 // ----- USER PROMPT -----
 
