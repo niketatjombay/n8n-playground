@@ -1,11 +1,11 @@
 // 7.3_JS_PrepScripts — Prepare facilitator script generation for 7 parallel groups
-// Input: QC review output (from Agent 3) — not directly used but triggers execution order
-// Reads: finalized content (6.1_JS_Merge), blueprint (3.3_JS_ParseAgent1A),
+// Input: QC review output (from 7.1h_JS_NormQC) — not directly used but triggers execution order
+// Reads: finalized content (6.4_JS_NormContent), blueprint (3.6_JS_NormBP),
 //         content tags (2.10_JS_ParseTags), pre-work slides (1.2_PREP_Input)
 
 const validatedInput = $('1.2_PREP_Input').first().json;
-const mergedContent = $('6.1_JS_Merge').first().json;
-const agent1 = $('3.3_JS_ParseAgent1A').first().json.agent1_output;
+const mergedContent = $('6.4_JS_NormContent').first().json;
+const agent1 = $('3.6_JS_NormBP').first().json.agent1_output;
 const tagData = $('2.10_JS_ParseTags').first().json;
 const qcReview = $input.first().json;
 const qcData = qcReview.llm_response || qcReview;
