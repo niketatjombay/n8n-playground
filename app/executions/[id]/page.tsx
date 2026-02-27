@@ -169,7 +169,7 @@ function CopyBtn({ text, className = '' }: { text: string; className?: string })
   }, [text]);
 
   return (
-    <button onClick={copy} className={`text-zinc-600 hover:text-zinc-300 transition-colors ${className}`} title="Copy">
+    <button onClick={(e) => { e.stopPropagation(); copy(); }} className={`text-zinc-600 hover:text-zinc-300 transition-colors ${className}`} title="Copy">
       {copied ? (
         <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -208,18 +208,20 @@ function DataPanel({ label, data, defaultOpen = false, accent = 'zinc' }: {
 
   return (
     <div className={`rounded border ${ac.split(' ')[0]} overflow-hidden`}>
-      <button
+      <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-900/60 hover:bg-zinc-800/60 transition-colors cursor-pointer"
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-3 py-1.5 bg-zinc-900/60 hover:bg-zinc-800/60 transition-colors"
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(!open); } }}
       >
         <span className={`text-[10px] font-mono font-semibold uppercase tracking-wider ${ac.split(' ').slice(1).join(' ')}`}>
           {label}
         </span>
         <div className="flex items-center gap-2">
-          <CopyBtn text={text} />
+          <CopyBtn text={text} className="z-10" />
           <span className="text-zinc-600 text-[10px]">{open ? '▴' : '▾'}</span>
         </div>
-      </button>
+      </div>
       {open && (
         <pre className="px-3 py-2.5 text-[11px] font-mono text-zinc-400 overflow-auto max-h-80 bg-zinc-950/50 leading-relaxed whitespace-pre-wrap break-words">
           {text}
