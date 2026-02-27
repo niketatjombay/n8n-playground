@@ -1,8 +1,8 @@
 // 2.8_FMT_TagContent — Build content tagging prompt
-// NEW in v2: Maps KB units + pre-work slides → 17 session slides
+// v3: Maps KB units + pre-work slides → dynamic session slides (expanded from alignment)
 //
 // Why this matters: Without tagging, 73K chars of pre-work data would either
-// go to ALL 7 groups (timeout) or be dropped entirely (no grounding).
+// go to ALL groups (timeout) or be dropped entirely (no grounding).
 // With tagging, each group gets only its relevant pre-work slides.
 
 const validatedInput = $('1.2_PREP_Input').first().json;
@@ -20,13 +20,28 @@ try {
 
 const preWorkMeta = validatedInput.pre_work_metadata || {};
 const slideSummary = preWorkMeta.slide_summary || [];
-const slideTemplate = validatedInput.slide_template || {};
 const kbResults = kbData.kb_results || [];
 
-// Build compact session slide list
+// Read dynamic slide template from alignment (v3: expanded slides)
+let slideTemplate = validatedInput.slide_template || {};
+let outlineAlignment = {};
+try {
+  const alignData = $('2.0d_JS_AlignOutline').first().json;
+  if (alignData.slide_template && Object.keys(alignData.slide_template).length > 0) {
+    slideTemplate = alignData.slide_template;
+  }
+  outlineAlignment = alignData.outline_alignment || {};
+} catch(e) {}
+
+// Build session slide list with outline context for better tagging
 const sessionSlides = {};
 for (const [key, val] of Object.entries(slideTemplate)) {
-  sessionSlides[key] = val.type;
+  const alignment = outlineAlignment[key] || {};
+  sessionSlides[key] = {
+    type: val.type,
+    outline_topic: alignment.outline_section || '',
+    outline_excerpt: (alignment.outline_excerpt || '').substring(0, 200)
+  };
 }
 
 // Build compact KB summary (just id + title + type for tagging)
@@ -44,32 +59,28 @@ const pwSummary = slideSummary.map(s => ({
   summary: (s.summary || '').substring(0, 300)  // 300 chars max to keep prompt compact
 }));
 
-const systemPrompt = `You are a content mapping assistant. Given a list of session slides, pre-work slides, and knowledge base units, determine which pre-work slides and KB units are relevant to each session slide.
+const systemPrompt = `You are a content mapping assistant. Given a list of session slides (with their types and outline topics), pre-work slides, and knowledge base units, determine which pre-work slides and KB units are relevant to each session slide.
 
 OUTPUT RULES:
-- Return ONLY valid JSON with keys "slide_1" through "slide_17".
+- Return ONLY valid JSON with keys matching the session slide IDs provided.
 - Each key maps to: { "kb_units": ["id", ...], "pre_work_slides": ["id", ...] }
 - A pre-work slide or KB unit can map to MULTIPLE session slides.
 - Some session slides may have empty arrays (e.g., Break, Module breaker).
 - Do NOT add commentary — ONLY the JSON object.
 
 MAPPING GUIDANCE:
-- Each pre-work slide includes a SUMMARY of its bullet content. Use these summaries (not just titles) to determine relevance to each session slide.
-- slide_1 (Session title): pre-work project overview slides
-- slide_6 (Program overview): pre-work project/company profile slides
-- slide_7 (Objectives): pre-work themes, development goals
-- slide_9 (Content): pre-work insights, challenges, behavioral themes + relevant KB frameworks
-- slide_10 (Quote): KB units with quotes or thought leadership
-- slide_11 (Discussion): pre-work challenges, current vs desired state
-- slide_12 (Activity): KB units with activities, exercises + pre-work real examples
-- slide_14 (Questions): pre-work challenges, participant pain points
-- slide_16 (Call to Action): pre-work development themes, action-oriented content
-- slides 2,3,4,5,8,13,15,17: typically empty or minimal mapping
-- Use the CONTENT OUTLINE modules to understand which topics belong to which slides. Map KB units to the session slide whose outline module best matches.`;
+- Each session slide has a TYPE and an OUTLINE TOPIC. Use both to determine relevance.
+- Match KB units to slides whose outline topic aligns with the KB unit's subject matter.
+- Match pre-work slides to session slides based on content similarity.
+- Content (AC) slides about specific topics should get KB units about those same topics.
+- Activity (CE) slides should get KB units with exercises/activities related to the topic.
+- Discussion/Reflection (RO) slides should get pre-work slides with challenges/examples.
+- Static slides (Session title, Jombay intro, Trainer intro, Agenda, Break, Closing) typically get empty arrays.
+- Use the outline excerpts to understand WHAT each slide is about — map KB/pre-work to the right topic.`;
 
 const userPrompt = `Map the pre-work slides and KB units to session slides. Return ONLY the JSON object.
 
-=== SESSION SLIDES (17 types) ===
+=== SESSION SLIDES (${Object.keys(sessionSlides).length} slides with types and outline topics) ===
 ${JSON.stringify(sessionSlides)}
 
 === PRE-WORK SLIDES (${pwSummary.length} items) ===
