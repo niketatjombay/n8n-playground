@@ -16,8 +16,27 @@ try {
   outlineAlignment = $('2.0d_JS_AlignOutline').first().json.outline_alignment || {};
 } catch(e) { outlineAlignment = {}; }
 
+// v3: dynamic slide count from alignment
+let totalSlides = 17;
+let deliverySequence = [];
+try {
+  const alignData = $('2.0d_JS_AlignOutline').first().json;
+  totalSlides = alignData.total_slides || 17;
+  deliverySequence = alignData.delivery_sequence || [];
+} catch(e) {}
+
+// Fallback: build delivery_sequence from slide count
+if (deliverySequence.length === 0) {
+  for (let i = 1; i <= totalSlides; i++) {
+    deliverySequence.push('slide_' + i);
+  }
+}
+
 const rawSlideSpec = contentMerge.slide_spec || {};
 const facilitatorScript = scriptMerge.facilitator_script || {};
+
+// Read coverage from upstream (passed through from 6.2_JS_CoverageCheck)
+const coverageReport = contentMerge.coverage_report || {};
 const sessionConstraints = validatedInput.session_constraints || {};
 const sessionOverview = agent1.session_overview || {};
 const contentTags = (tagData.content_tags || {});
@@ -85,8 +104,8 @@ const ROOT_FIELDS = new Set([
   'slide_number', 'outline_ref', 'outline_topic'
 ]);
 
-// --- Build tab-structured slides ---
-const slides = {};
+// --- Build tab-structured slides (ordered by delivery_sequence) ---
+const slideLookup = {};
 
 for (const [key, rawSlide] of Object.entries(rawSlideSpec)) {
   if (!/^slide_\d+$/.test(key)) continue;
@@ -142,7 +161,7 @@ for (const [key, rawSlide] of Object.entries(rawSlideSpec)) {
   // Add sources to content
   content.sources = sources;
 
-  slides[key] = {
+  slideLookup[key] = {
     slide_number: rawSlide.slide_number || parseInt(key.replace('slide_', ''), 10),
     outline_ref: alignment.outline_section || '',
     outline_topic: alignment.outline_section || '',
@@ -153,6 +172,20 @@ for (const [key, rawSlide] of Object.entries(rawSlideSpec)) {
   };
 }
 
+// Order slides by delivery_sequence
+const slides = {};
+for (const slideKey of deliverySequence) {
+  if (slideLookup[slideKey]) {
+    slides[slideKey] = slideLookup[slideKey];
+  }
+}
+// Append any slides not in delivery_sequence (safety net)
+for (const key of Object.keys(slideLookup)) {
+  if (!slides[key]) {
+    slides[key] = slideLookup[key];
+  }
+}
+
 // Build slide_mapping for knowledge_bank
 const slideMapping = {};
 for (const [key, tags] of Object.entries(contentTags)) {
@@ -160,8 +193,6 @@ for (const [key, tags] of Object.entries(contentTags)) {
     slideMapping[key] = tags.kb_units;
   }
 }
-
-const totalSlides = Object.keys(slides).length;
 
 const finalOutput = {
   metadata: {
@@ -172,6 +203,7 @@ const finalOutput = {
     total_slides: totalSlides,
     generated_date: new Date().toISOString().split('T')[0],
     overall_confidence: (agent3.review_summary || {}).overall_quality || 'Medium',
+    coverage_report: coverageReport,
     run_id: validatedInput.run_id || $execution.id,
     input_hash: validatedInput.input_hash || '',
     n8n_workflow_execution_id: $execution.id,
