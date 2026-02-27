@@ -3,6 +3,23 @@
 const data = $('4.1_JS_SplitGroups').first().json;
 const group = data.groups.GROUP_KEY;
 
+// Skip LLM call if group has no slides (v3: some groups may be empty)
+if (!group || !group.slides || group.slides.length === 0) {
+  return [{ json: {
+    system_prompt: '',
+    prompt: '',
+    model: 'global.anthropic.claude-sonnet-4-6',
+    node_name: 'Agent2_GroupGROUP_NUM',
+    skip: true,
+    memory_id: data.memory_id,
+    knowledge_base_id: data.knowledge_base_id,
+    workflow_session_id: data.workflow_session_id,
+    workflow_id: data.workflow_id,
+    project_id: data.project_id,
+    client_id: data.client_id
+  }}];
+}
+
 const userPrompt = 'Generate on-slide content for the following slide group.\n\n'
   + '=== SLIDE GROUP ===\n'
   + 'Group: ' + group.name + '\n'
@@ -20,6 +37,11 @@ const userPrompt = 'Generate on-slide content for the following slide group.\n\n
   + 'Session Type: ' + (data.session_constraints.sessionType || data.session_constraints.session_type || 'Not specified')
   + ' | Duration: ' + (data.session_constraints.totalDuration || data.session_constraints.total_duration || 'Not specified') + '\n'
   + 'Tailor content depth and activity design to this session format and duration.\n\n'
+  + ((data.session_constraints.additionalInstructions || data.session_constraints.additional_instructions || '')
+    ? '=== USER GUIDELINES ===\n'
+      + (data.session_constraints.additionalInstructions || data.session_constraints.additional_instructions) + '\n'
+      + 'Follow these unless they conflict with the session outline.\n\n'
+    : '')
   + '=== CONTENT OUTLINE (client\'s intended content structure) ===\n'
   + JSON.stringify(data.common_context.content_outline || {}) + '\n\n'
   + '=== PRE-WORK DATA (tagged for this group only) ===\n'
