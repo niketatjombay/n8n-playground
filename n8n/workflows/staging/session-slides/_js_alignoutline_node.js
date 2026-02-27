@@ -1,6 +1,6 @@
 // 2.0d_JS_AlignOutline — Extract slide plan and build dynamic template
-// v2: Processes LLM-generated slide plan (dynamic count)
-// Outputs: slide_plan, slide_template, outline_alignment, total_slides
+// v3: Adds delivery_sequence, section_expansion, timing_source, section_number, estimated_duration_minutes
+// Outputs: slide_plan, slide_template, outline_alignment, delivery_sequence, section_expansion, timing_source, total_slides
 
 const response = $input.first().json;
 
@@ -65,7 +65,8 @@ for (const entry of slidePlan) {
     type: slideType,
     gagne: typeInfo.gagne,
     kolb: typeInfo.kolb,
-    ages: typeInfo.ages
+    ages: typeInfo.ages,
+    section_number: entry.section_number || num
   };
 
   const hasEvidence = !!(entry.outline_excerpt && entry.outline_excerpt.length > 10);
@@ -75,15 +76,30 @@ for (const entry of slidePlan) {
     has_outline_evidence: hasEvidence,
     outline_section: entry.outline_ref || entry.outline_topic || null,
     outline_excerpt: entry.outline_excerpt || null,
-    alignment_rationale: entry.alignment_rationale || ''
+    alignment_rationale: entry.alignment_rationale || '',
+    section_number: entry.section_number || num,
+    estimated_duration_minutes: entry.estimated_duration_minutes || 0
   };
 }
+
+// Extract v3 fields
+const deliverySequence = parsed.delivery_sequence || [];
+const sectionExpansion = parsed.section_expansion || {};
+const timingSource = parsed.timing_source || 'unknown';
+
+// Build delivery_sequence fallback
+const finalSequence = deliverySequence.length > 0
+  ? deliverySequence
+  : slidePlan.map(e => 'slide_' + e.slide_number);
 
 return [{ json: {
   slide_plan: slidePlan,
   total_slides: totalSlides,
   slide_template: slideTemplate,
   outline_alignment: outlineAlignment,
+  delivery_sequence: finalSequence,
+  section_expansion: sectionExpansion,
+  timing_source: timingSource,
   status: slidesWithEvidence >= Math.ceil(totalSlides * 0.5) ? 'aligned' : 'partial',
   slides_with_evidence: slidesWithEvidence
 }}];
