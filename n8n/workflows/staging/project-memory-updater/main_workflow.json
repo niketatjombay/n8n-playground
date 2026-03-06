@@ -132,10 +132,7 @@
       ],
       "id": "c9d0e1f2-sub-extract",
       "name": "2.2_SUB_Extract",
-      "onError": "continueErrorOutput",
-      "retryOnFail": true,
-      "maxTries": 2,
-      "waitBetweenTries": 5000
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -180,10 +177,7 @@
       ],
       "id": "d4e5f6a7-sub-merge",
       "name": "3.1_SUB_Merge",
-      "onError": "continueErrorOutput",
-      "retryOnFail": true,
-      "maxTries": 2,
-      "waitBetweenTries": 5000
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -215,10 +209,7 @@
       ],
       "id": "f2a3b4c5-sub-questions",
       "name": "3.3_SUB_Questions",
-      "onError": "continueErrorOutput",
-      "retryOnFail": true,
-      "maxTries": 2,
-      "waitBetweenTries": 5000
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
