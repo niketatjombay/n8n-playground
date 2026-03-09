@@ -8,7 +8,7 @@
       "environment": null,
       "folders": [
         {
-          "folder_id": null,
+          "folder_id": "4JLkQmhzFV2M76tX",
           "folder_name": "pre-work-summary",
           "environment": null,
           "folders": [
@@ -97,7 +97,7 @@
           "workflows": []
         },
         {
-          "folder_id": null,
+          "folder_id": "4JLkQmhzFV2M76tX",
           "folder_name": "session-slides",
           "environment": null,
           "folders": [
@@ -418,7 +418,7 @@
           "workflows": []
         },
         {
-          "folder_id": null,
+          "folder_id": "4JLkQmhzFV2M76tX",
           "folder_name": "case-study-creator",
           "environment": null,
           "folders": [
@@ -573,12 +573,12 @@
           "workflows": []
         },
         {
-          "folder_id": null,
+          "folder_id": "4JLkQmhzFV2M76tX",
           "folder_name": "document-summary-extractor",
           "environment": null,
           "folders": [
             {
-              "folder_id": null,
+              "folder_id": "Cj8Wfkq6WS7w1Gg9",
               "folder_name": "development",
               "environment": "development",
               "folders": [],
@@ -610,7 +610,7 @@
               ]
             },
             {
-              "folder_id": null,
+              "folder_id": "c6ZI4UXcv20OKrHM",
               "folder_name": "staging",
               "environment": "staging",
               "folders": [],
@@ -668,7 +668,7 @@
           "workflows": []
         },
         {
-          "folder_id": null,
+          "folder_id": "4JLkQmhzFV2M76tX",
           "folder_name": "project-memory-updater",
           "environment": null,
           "folders": [
@@ -742,7 +742,7 @@
           "workflows": []
         },
         {
-          "folder_id": null,
+          "folder_id": "4JLkQmhzFV2M76tX",
           "folder_name": "llm-sub-workflow",
           "environment": null,
           "folders": [
@@ -765,7 +765,9 @@
                   "used_by": [
                     "case-study-creator",
                     "project-memory-updater",
-                    "document-summary-extractor"
+                    "document-summary-extractor",
+                    "pre-work-summary",
+                    "session-slides"
                   ],
                   "api_endpoint": "https://agentcoreapi.jombay.com",
                   "nodes": [
@@ -808,7 +810,9 @@
                   "used_by": [
                     "case-study-creator",
                     "project-memory-updater",
-                    "document-summary-extractor"
+                    "document-summary-extractor",
+                    "pre-work-summary",
+                    "session-slides"
                   ],
                   "api_endpoint": "https://agentcoreapi.jombay.com",
                   "nodes": [
@@ -860,7 +864,7 @@
           "workflows": []
         },
         {
-          "folder_id": null,
+          "folder_id": "4JLkQmhzFV2M76tX",
           "folder_name": "drive-utils",
           "environment": null,
           "folders": [
@@ -882,7 +886,9 @@
                   "description": "Google Drive document extraction — fetches document content from a Google Drive URL and returns the extracted text.",
                   "used_by": [
                     "case-study-creator",
-                    "document-summary-extractor"
+                    "document-summary-extractor",
+                    "pre-work-summary",
+                    "session-slides"
                   ],
                   "nodes": [
                     "Start (trigger)",
@@ -917,7 +923,9 @@
                   "description": "Google Drive document extraction — fetches document content from a Google Drive URL and returns the extracted text.",
                   "used_by": [
                     "case-study-creator",
-                    "document-summary-extractor"
+                    "document-summary-extractor",
+                    "pre-work-summary",
+                    "session-slides"
                   ],
                   "nodes": [
                     "Start (trigger)",
@@ -952,7 +960,9 @@
                   "description": "Google Drive document extraction — fetches document content from a Google Drive URL and returns the extracted text.",
                   "used_by": [
                     "case-study-creator",
-                    "document-summary-extractor"
+                    "document-summary-extractor",
+                    "pre-work-summary",
+                    "session-slides"
                   ]
                 }
               ]

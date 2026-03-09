@@ -50,7 +50,6 @@ const environments = {
     prefix: '[PROD]',
     instance: 'production',
     coreApiUrl: 'https://coreapi.jombay.com',
-    assetsApiUrl: 'https://assetsapi.jombay.com',
     llmApiUrl: 'https://agentcoreapi.jombay.com',
     datatables: {
       modelConfig: { id: '7801WWb2nG7Hjljd', name: 'agentcore_models' }
