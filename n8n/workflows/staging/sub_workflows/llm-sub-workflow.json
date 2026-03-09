@@ -66,10 +66,10 @@
         "operation": "get",
         "dataTableId": {
           "__rl": true,
-          "value": "7801WWb2nG7Hjljd",
+          "value": "LChiwpG5qGEyeY76",
           "mode": "list",
           "cachedResultName": "agentcore_models",
-          "cachedResultUrl": "/projects/JIV2elLHsVFXybZ2/datatables/7801WWb2nG7Hjljd"
+          "cachedResultUrl": "/projects/JIV2elLHsVFXybZ2/datatables/LChiwpG5qGEyeY76"
         },
         "returnAll": true
       },
@@ -303,7 +303,7 @@
             "__rl": true,
             "value": "LChiwpG5qGEyeY76",
             "mode": "list",
-            "cachedResultName": "nexus_workflow_prompt_templates",
+            "cachedResultName": "agentcore_models",
             "cachedResultUrl": "/projects/JIV2elLHsVFXybZ2/datatables/LChiwpG5qGEyeY76"
           },
           "returnAll": true

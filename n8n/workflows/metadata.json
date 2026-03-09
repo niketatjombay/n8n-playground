@@ -649,7 +649,7 @@
               "workflows": [
                 {
                   "n8nId": "slT9cjHoFs06m9e1",
-                  "name": "[PROD] Document Summary Extractor (Without Long Term Memory)",
+                  "name": "[PROD] Document Summary Extractor",
                   "slug": "document-summary-extractor",
                   "type": "main",
                   "webhookPath": "/document-summary-extractor",
@@ -702,7 +702,7 @@
               "workflows": [
                 {
                   "n8nId": "uX4p9Kt3Ztz59NEO",
-                  "name": "[STG] Project Memory Updater",
+                  "name": "[STG] Project Memory Updater v2",
                   "slug": "project-memory-updater",
                   "type": "main",
                   "webhookPath": "6d067559-e8da-4451-9f99-1a54840140be",
@@ -941,7 +941,7 @@
               "folders": [],
               "workflows": [
                 {
-                  "n8nId": "ebJGIpZXxt2szqGj",
+                  "n8nId": "KA0PQtx4oJHoDoTo",
                   "name": "[PROD] Google Drive Utils (Sub-Workflow)",
                   "slug": "drive-utils",
                   "type": "sub",

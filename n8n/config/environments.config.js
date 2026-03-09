@@ -27,6 +27,9 @@ const environments = {
     instance: 'dev_staging',
     coreApiUrl: 'https://coreapi.ur-nl.com',
     llmApiUrl: 'https://agentcoreapi.jombay.com',
+    datatables: {
+      modelConfig: { id: 'LChiwpG5qGEyeY76', name: 'agentcore_models' }
+    },
     credentials: {
       httpHeaderAuth: { id: '9fZP8bOKRNJtilO1', name: 'Jombay Staging API' }
     }
@@ -36,6 +39,9 @@ const environments = {
     instance: 'dev_staging',
     coreApiUrl: 'https://coreapi.ur-nl.com',
     llmApiUrl: 'https://agentcoreapi.jombay.com',
+    datatables: {
+      modelConfig: { id: 'LChiwpG5qGEyeY76', name: 'agentcore_models' }
+    },
     credentials: {
       httpHeaderAuth: { id: '9fZP8bOKRNJtilO1', name: 'Jombay Staging API' }
     }
@@ -46,6 +52,9 @@ const environments = {
     coreApiUrl: 'https://coreapi.jombay.com',
     assetsApiUrl: 'https://assetsapi.jombay.com',
     llmApiUrl: 'https://agentcoreapi.jombay.com',
+    datatables: {
+      modelConfig: { id: '7801WWb2nG7Hjljd', name: 'agentcore_models' }
+    },
     credentials: {
       httpHeaderAuth: { id: 'AhWR4DuDqFOGBNyo', name: 'Jombay Production API' }
     }

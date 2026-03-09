@@ -179,10 +179,10 @@ const workflow = {
         operation: 'get',
         dataTableId: {
           __rl: true,
-          value: 'QPZLJWuTDMYHs1dL',
+          value: 'LChiwpG5qGEyeY76',
           mode: 'list',
-          cachedResultName: 'nexus_workflow_prompt_templates',
-          cachedResultUrl: '/projects/JIV2elLHsVFXybZ2/datatables/QPZLJWuTDMYHs1dL'
+          cachedResultName: 'agentcore_models',
+          cachedResultUrl: '/projects/JIV2elLHsVFXybZ2/datatables/LChiwpG5qGEyeY76'
         },
         matchType: 'allConditions',
         filters: {
