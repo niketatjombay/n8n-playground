@@ -19,7 +19,7 @@ loadEnv();
 
 const N8nClient = require('../lib/n8n-client');
 const {
-  readMetadata, listWorkflowSlugs, getSubWorkflows,
+  readMetadata, listWorkflowSlugs, getSubWorkflows, getWorkflow,
   updateWorkflowEnv, updateSubWorkflowEnv
 } = require('../lib/metadata');
 const fs = require('fs');
@@ -56,8 +56,6 @@ async function deployWorkflows() {
 
     console.log(`Deploying workflows for environment: ${envFlag}\n`);
 
-    const meta = readMetadata();
-
     // Deploy shared sub-workflows first
     const allSubs = getSubWorkflows();
     for (const [subSlug, subEntry] of Object.entries(allSubs)) {
@@ -83,8 +81,10 @@ async function deployWorkflows() {
     const slugs = slugFlag ? [slugFlag] : listWorkflowSlugs();
 
     for (const slug of slugs) {
-      const entry = meta[slug];
-      if (!entry) {
+      let entry;
+      try {
+        entry = getWorkflow(slug);
+      } catch {
         console.warn(`Workflow "${slug}" not found in metadata.json — skipping`);
         continue;
       }

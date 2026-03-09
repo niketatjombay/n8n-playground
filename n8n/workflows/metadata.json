@@ -54,7 +54,7 @@
                   "type": "main",
                   "webhookPath": "/staging/pre-work-summary",
                   "active": true,
-                  "lastDeployedAt": "2026-02-27T10:30:37.367Z",
+                  "lastDeployedAt": "2026-03-08T02:26:49.792Z",
                   "archived": false,
                   "description": "Pre-work summary creator",
                   "uses_sub_workflows": [
@@ -83,7 +83,7 @@
                   "type": "main",
                   "webhookPath": "/pre-work-summary",
                   "active": true,
-                  "lastDeployedAt": "2026-02-26T06:09:23.113Z",
+                  "lastDeployedAt": "2026-03-08T10:18:54.523Z",
                   "archived": false,
                   "description": "Pre-work summary creator",
                   "uses_sub_workflows": [
@@ -259,7 +259,7 @@
                   "type": "main",
                   "webhookPath": "/staging/session-slides",
                   "active": true,
-                  "lastDeployedAt": "2026-02-27T10:30:37.789Z",
+                  "lastDeployedAt": "2026-03-08T02:26:50.479Z",
                   "archived": false,
                   "description": "Session slides creator",
                   "uses_sub_workflows": [
@@ -404,7 +404,7 @@
                   "type": "main",
                   "webhookPath": "/session-slides",
                   "active": true,
-                  "lastDeployedAt": "2026-02-26T06:09:24.611Z",
+                  "lastDeployedAt": "2026-03-08T10:18:56.805Z",
                   "archived": false,
                   "description": "Session slides creator",
                   "uses_sub_workflows": [
@@ -497,7 +497,7 @@
                   "type": "main",
                   "webhookPath": "/staging/case-study-creator",
                   "active": true,
-                  "lastDeployedAt": "2026-02-27T10:30:37.998Z",
+                  "lastDeployedAt": "2026-03-08T02:26:50.794Z",
                   "archived": false,
                   "description": "Main case study creator workflow — 9 LLM stages that generate a complete case study with questions, assessor guidance, quality scoring, and bias checking.",
                   "uses_sub_workflows": [
@@ -622,7 +622,7 @@
                   "type": "main",
                   "webhookPath": "31d605ed-a3eb-4516-8b8c-051d005cd56a",
                   "active": true,
-                  "lastDeployedAt": "2026-03-02T03:08:53.204Z",
+                  "lastDeployedAt": "2026-03-08T02:26:50.977Z",
                   "archived": false,
                   "description": "Document Summary Extractor — processes project_info, meeting_notes, and project_document file types. Extracts text from Google Drive documents via drive-utils sub-workflow, summarizes content via LLM sub-workflow, and updates coreapi.",
                   "uses_sub_workflows": [
@@ -654,7 +654,7 @@
                   "type": "main",
                   "webhookPath": "/document-summary-extractor",
                   "active": true,
-                  "lastDeployedAt": "2026-02-26T06:09:26.770Z",
+                  "lastDeployedAt": "2026-03-08T10:18:55.479Z",
                   "archived": false,
                   "description": "Document Summary Extractor — processes project_info, meeting_notes, and project_document file types. Extracts text from Google Drive documents via drive-utils sub-workflow, summarizes content via LLM sub-workflow, and updates coreapi.",
                   "uses_sub_workflows": [
@@ -707,7 +707,7 @@
                   "type": "main",
                   "webhookPath": "6d067559-e8da-4451-9f99-1a54840140be",
                   "active": true,
-                  "lastDeployedAt": "2026-03-06T05:33:44.422Z",
+                  "lastDeployedAt": "2026-03-08T02:26:51.148Z",
                   "archived": false,
                   "description": "Project Memory Updater v2 — 2-step pipeline (Merge + Quality Review) that maintains project memory with active deduplication, hallucination prevention, and clarification questions. Modes: 2A Initial Build, 2B Document Merge, 2C Corrections.",
                   "uses_sub_workflows": [
@@ -941,7 +941,7 @@
               "folders": [],
               "workflows": [
                 {
-                  "n8nId": "KA0PQtx4oJHoDoTo",
+                  "n8nId": "ebJGIpZXxt2szqGj",
                   "name": "[PROD] Google Drive Utils (Sub-Workflow)",
                   "slug": "drive-utils",
                   "type": "sub",

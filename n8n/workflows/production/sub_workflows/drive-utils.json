@@ -346,6 +346,7 @@
       ],
       "id": "133d39fe-7de8-43dd-9582-f1f11e8002b8",
       "name": "XTR_FromPDF",
+      "onError": "continueErrorOutput",
       "notes": "Extracts text from PDF files using OCR and text extraction. Joins all pages into single text."
     },
     {
@@ -363,6 +364,7 @@
       ],
       "id": "6fcfd555-fe85-46f3-b993-2e6e791ef35c",
       "name": "XTR_FromText",
+      "onError": "continueErrorOutput",
       "notes": "Extracts text from plain text and markdown files. Preserves formatting."
     },
     {
@@ -379,6 +381,7 @@
       ],
       "id": "ad5d99c7-36fa-4965-bf32-e58a58c48551",
       "name": "XTR_FromDoc",
+      "onError": "continueErrorOutput",
       "notes": "Extracts text from Microsoft Word documents (.doc, .docx)."
     },
     {
@@ -394,6 +397,7 @@
       ],
       "id": "ed54193a-ca6e-4ed0-b1de-693c7a675b96",
       "name": "XTR_FromCSV",
+      "onError": "continueErrorOutput",
       "notes": "Extracts structured data from CSV files. Converts to JSON array."
     },
     {
@@ -412,6 +416,7 @@
       ],
       "id": "c51eda6b-8043-4df4-bc7c-0ab6d0b82f1d",
       "name": "XTR_FromXLS",
+      "onError": "continueErrorOutput",
       "notes": "Extracts data from legacy Excel files (.xls). Converts to structured data."
     },
     {
@@ -428,6 +433,7 @@
       ],
       "id": "fe36fdaa-f93e-4eed-bb40-37073ba68ec4",
       "name": "XTR_FromXLSX",
+      "onError": "continueErrorOutput",
       "notes": "Extracts data from modern Excel files (.xlsx). Converts to structured data."
     },
     {
